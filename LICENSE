@@ -1,21 +1,13 @@
-MIT License
-
 Copyright (c) 2026 amaxman
+Permission is hereby granted, free of charge, to any individual or non-profit entity obtaining a copy of this software and associated documentation files (the "Software"), to use, copy, modify, merge, publish and distribute the Software for non-commercial purposes only, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+Commercial use, sale, licensing for profit, integration into commercial products, SaaS services or any for-profit business activity is strictly prohibited.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+---
+【中文许可说明】
+版权所有 (c) 2026 amaxman
+本软件仅对个人学习者、非营利组织开放免费使用、复制、修改、合并、公开发布与分发权限，仅限非商业用途。
+严禁任何商业用途：禁止将本软件用于付费产品、商业系统、SaaS 服务、企业业务场景、二次售卖、商业授权等一切盈利或商业经营行为。如需商业使用，请联系作者获取正式商业授权。
+所有副本或软件主要部分，必须完整保留本版权声明及许可文本。
+本软件按“原样”提供，不提供任何明示或暗示的担保，包括但不限于适销性、特定用途适用性及非侵权性担保。在任何情况下，作者不对因使用本软件产生的任何损害、索赔承担责任。
