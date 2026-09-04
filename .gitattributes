@@ -1,0 +1,2 @@
+# 例子1：把 .h 文件强制识别为 C++
+*.h linguist-language=Java
