@@ -1,0 +1,53 @@
+package mom.modules.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import mom.service.basic.config.DataValueService;
+
+import mom.entity.factory.client.Client;
+import mom.service.factory.client.ClientService;
+
+import mom.entity.factory.order.FactoryOrder;
+import mom.service.factory.order.FactoryOrderService
+import com.jeesite.common.lang.StringUtils
+import com.jeesite.common.utils.SpringUtils
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+global FactoryOrder factoryOrder;
+
+rule "sys_set_order_no"
+    when
+    then
+    if (factoryOrder==null) return;
+    if (!factoryOrder.getIsNewRecord()) return;
+    String clientId=factoryOrder.getClientId();
+    if (StringUtils.isEmpty(clientId)) {
+        factoryOrder.setOrderNo(IdGen.nextId());
+        return;
+    }
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) {
+         factoryOrder.setOrderNo(IdGen.nextId());
+         return;
+     }
+    Client client=clientService.get(clientId);
+    if (client==null) {
+        factoryOrder.setOrderNo(IdGen.nextId());
+        return;
+    }
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) {
+        factoryOrder.setOrderNo(IdGen.nextId());
+        return;
+    }
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    String orderNo=String.format(
+                       "DP21-%s%s%02d"
+                       ,clientCode
+                       ,DateUtils.formatDate(new Date(),"yyMMdd")
+                       ,dataValueService.getNextNum("sales")
+               );
+    factoryOrder.setOrderNo(orderNo);
+end

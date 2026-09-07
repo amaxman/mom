@@ -1,0 +1,65 @@
+package mom.modules.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import mom.service.basic.config.DataValueService;
+import mom.entity.factory.proofing.FactProofing;
+import mom.entity.factory.proofing.FactProofDetail;
+
+import mom.entity.factory.client.Client;
+import mom.service.factory.client.ClientService;
+
+import mom.entity.factory.cargo.Cargo;
+import mom.entity.factory.cargo.CargoDefine;
+
+import com.jeesite.common.lang.StringUtils
+import com.jeesite.common.utils.SpringUtils
+import com.jeesite.common.lang.DateUtils
+import java.util.Date
+import com.jeesite.common.config.Global;
+
+global Client client
+global CargoDefine cargoDefine
+global FactProofing factProofing
+global FactProofDetail factProofDetail
+global Cargo cargo
+
+rule "sys_set_cargo_no"
+    when
+    then
+    if (client==null) return;
+    if (cargoDefine==null) return;
+    if (factProofing==null) return;
+    if (factProofDetail==null) return;
+    if (cargo==null) return;
+
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    String cargoId=String.format(
+    				"%s_%s%s%s_%s"
+    				,cargoDefine.getCargoCode()
+    				,client.getClientCode()
+    				,DateUtils.formatDate(new Date(),"yyMMdd")
+    				,dataValueService.getNextNum("cargo")
+    				,factProofDetail.getProofingCode()
+    		);
+
+    cargo.setClientId(client.getId());
+    cargo.setCargoId(cargoId);
+    cargo.setCargoDefId(cargoDefine.getId());
+
+    cargo.setCargoName(cargoDefine.getCargoName());
+    cargo.setCargoStyle(cargoDefine.getCargoStyle());
+    cargo.setCargoFullName(cargoDefine.getCargoFullName());
+
+    cargo.setProofCode(factProofing.getProofingCode());
+    cargo.setProofEdition(factProofDetail.getProofingCode());
+
+    cargo.setSrcCode(factProofDetail.getId());
+    cargo.setCargoMetering("");
+    cargo.setCargoMeteringUnit(cargoDefine.getCargoMeteringUnit());
+    cargo.setCargoMeteringUnitCode("");
+
+    cargo.setFqc(Global.NO);
+    cargo.setOqc(Global.NO);
+end

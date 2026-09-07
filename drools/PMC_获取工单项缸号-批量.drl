@@ -1,0 +1,57 @@
+package mom.service.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import mom.service.basic.config.DataValueService;
+
+import java.util.List;
+
+import mom.entity.factory.manufacture.FactoryManuPlanDetail;
+import mom.entity.factory.cargo.Cargo;
+import mom.service.factory.cargo.CargoService;
+
+import com.jeesite.common.lang.DateUtils;
+import java.util.Date
+import java.util.stream.Collectors;
+
+global List list;
+
+rule "sys_manuPlanVatNo_bat"
+    when
+    then
+    if (list==null || list.isEmpty()) return;
+    List<FactoryManuPlanDetail> factoryManuPlanDetailList=(List<FactoryManuPlanDetail>)list;
+    if (factoryManuPlanDetailList==null || factoryManuPlanDetailList.isEmpty()) return;
+
+    factoryManuPlanDetailList=factoryManuPlanDetailList.stream().filter(p->StringUtils.isNotEmpty(p.getCargoId())).collect(Collectors.toList());
+    if (factoryManuPlanDetailList==null || factoryManuPlanDetailList.isEmpty()) return;
+
+    List<String> cargoIdList=factoryManuPlanDetailList.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+    if (cargoIdList.isEmpty()) return;
+
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    if (cargoService==null) return;
+
+    List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
+    if (cargoList==null || cargoList.isEmpty()) return;
+
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+        if (dataValueService==null) return;
+    List<Integer> keyValueIntValueList=dataValueService.getNextNumList("vatNo",factoryManuPlanDetailList.size());
+
+    int index=0;
+    for (FactoryManuPlanDetail factoryManuPlanDetail:factoryManuPlanDetailList) {
+        String cargoId=factoryManuPlanDetail.getCargoId();
+        Cargo cargo=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),cargoId)).findFirst().orElse(null);
+
+        if (cargo==null) continue;
+        String colorMatrixCode=cargo.getColorCate();
+        if (StringUtils.isEmpty(colorMatrixCode)) continue;
+        factoryManuPlanDetail.setVatNo(colorMatrixCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%03d",keyValueIntValueList.get(index)));
+        index++;
+    }
+
+end

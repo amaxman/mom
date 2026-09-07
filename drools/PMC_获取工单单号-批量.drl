@@ -1,0 +1,86 @@
+package mom.service.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import mom.service.basic.config.DataValueService;
+
+import java.util.List;
+
+import mom.entity.factory.client.Client;
+import mom.service.factory.client.ClientService;
+
+import mom.entity.factory.order.FactoryOrder;
+import mom.service.factory.order.FactoryOrderService;
+
+import mom.entity.factory.manufacture.FactoryManuPlan;
+import mom.service.factory.manufacture.FactoryManuPlanService;
+import com.jeesite.common.lang.DateUtils;
+import java.util.Date;
+import java.util.stream.Collectors;
+
+global List list;
+
+rule "sys_manuPlanOrderNoBat"
+    when
+    then
+    if (list==null || list.isEmpty()) return;
+    List<FactoryManuPlan> factoryManuPlanList=(List<FactoryManuPlan>)list;
+    if (factoryManuPlanList==null || factoryManuPlanList.isEmpty()) return;
+    List<String> orderIdList=factoryManuPlanList.stream()
+                .filter(p->StringUtils.isNotEmpty(p.getOrderId())).map(p->p.getOrderId())
+                .distinct().collect(Collectors.toList());
+    if (orderIdList.isEmpty()) return;
+    FactoryOrderService factoryOrderService=SpringUtils.getBean(FactoryOrderService.class);
+    if (factoryOrderService==null) return;
+    List<FactoryOrder> factoryOrderList=factoryOrderService.findListByIdList(orderIdList);
+    if (factoryOrderList==null || factoryOrderList.isEmpty()) return;
+
+    List<String> clientIdList=factoryOrderList.stream()
+                      .filter(p->StringUtils.isNotEmpty(p.getClientId())).map(p->p.getClientId())
+                      .distinct().collect(Collectors.toList());
+    if (clientIdList.isEmpty()) return;
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) return;
+    List<Client> clientList=clientService.findList(clientIdList);
+    if (clientList==null || clientList.isEmpty()) return;
+
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    if (dataValueService==null) return;
+
+    List<Integer> keyValueIntValueList=dataValueService.getNextNumList("manuPlan",factoryManuPlanList.size());
+
+    int index=0;
+    for (FactoryManuPlan factoryManuPlan:factoryManuPlanList) {
+        String orderId=factoryManuPlan.getOrderId();
+        if (StringUtils.isEmpty(orderId)) continue;
+        FactoryOrder factoryOrder=factoryOrderList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),orderId)).findFirst().orElse(null);
+        if (factoryOrder==null) continue;
+        String clientId=factoryOrder.getClientId();
+        if (StringUtils.isEmpty(clientId)) continue;
+        Client client=clientList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),clientId)).findFirst().orElse(null);
+        if (client==null) continue;
+        String clientCode=client.getClientCode();
+        if (StringUtils.isEmpty(clientCode)) return;
+        Integer planCate=factoryManuPlan.getPlanCate();
+        switch (planCate) {
+            case 1:
+                factoryManuPlan.setPlanOrderNo("S101-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",keyValueIntValueList.get(index)));
+                break;
+            case 7:
+            case 8:
+                factoryManuPlan.setPlanOrderNo("S103-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",keyValueIntValueList.get(index)));
+                break;
+            case 5:
+                factoryManuPlan.setPlanOrderNo("S107-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",keyValueIntValueList.get(index)));
+            default:
+                factoryManuPlan.setPlanOrderNo(IdGen.nextId());
+        }
+
+        index++;
+
+    }
+
+end

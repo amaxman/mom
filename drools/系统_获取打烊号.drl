@@ -1,0 +1,52 @@
+package mom.modules.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import mom.service.basic.config.DataValueService;
+
+import mom.entity.factory.client.Client;
+import mom.service.factory.client.ClientService
+
+import mom.entity.factory.proofing.FactProofing
+import mom.service.factory.proofing.FactProofingService
+import com.jeesite.common.lang.StringUtils
+import com.jeesite.common.utils.SpringUtils
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+global FactProofing factProofing;
+
+rule "sys_set_proofing_no"
+    when
+    then
+    if (factProofing==null) return;
+    String clientId=factProofing.getClientId();
+    if (StringUtils.isEmpty(clientId)) {
+        factProofing.setOrderNo(IdGen.nextId());
+        return;
+    }
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) {
+         factProofing.setOrderNo(IdGen.nextId());
+         return;
+     }
+    Client client=clientService.get(clientId);
+    if (client==null) {
+        factProofing.setOrderNo(IdGen.nextId());
+        return;
+    }
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) {
+        factProofing.setOrderNo(IdGen.nextId());
+        return;
+    }
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    String orderNo=String.format(
+                       "XA11-%s%s%02d"
+                       ,clientCode
+                       ,DateUtils.formatDate(new Date(),"yyMMdd")
+                       ,dataValueService.getNextNum("proofing")
+               );
+    factProofing.setProofingCode(orderNo);
+end

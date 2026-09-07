@@ -1,0 +1,87 @@
+package mom.service.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import mom.service.basic.config.DataValueService;
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+import mom.entity.factory.qc.QcFqc
+import mom.entity.factory.manufacture.FactoryManuPlanDetail
+import mom.service.factory.manufacture.FactoryManuPlanDetailService
+import mom.entity.factory.order.FactoryOrder
+import mom.service.factory.order.FactoryOrderService
+import mom.service.factory.client.ClientService
+import mom.entity.factory.client.Client;
+
+global QcFqc fqc;
+
+rule "QC_FQC_No"
+    when
+    then
+    if (fqc==null) {
+        System.out.println("FQC不允许为空");
+        return;
+    }
+    String manuPlanDetailId=fqc.getManuPlanDetailId();
+    if (StringUtils.isEmpty(manuPlanDetailId)) {
+        System.out.println("工单项标识不允许为空");
+        return;
+    }
+    FactoryManuPlanDetailService factoryManuPlanDetailService=SpringUtils.getBean(FactoryManuPlanDetailService.class);
+    if (factoryManuPlanDetailService==null) {
+        System.out.println("未能获取工单项服务");
+        return;
+    }
+    FactoryManuPlanDetail factoryManuPlanDetail=factoryManuPlanDetailService.get(manuPlanDetailId);
+    if (factoryManuPlanDetail==null) {
+        System.out.println("工单项不存在，可能被删除");
+        return;
+    }
+    String orderId=factoryManuPlanDetail.getOrderId();
+    if (StringUtils.isEmpty(orderId)) {
+        System.out.println("订单标识不允许为空");
+        return;
+    }
+    FactoryOrderService factoryOrderService=SpringUtils.getBean(FactoryOrderService.class);
+    if (factoryOrderService==null) {
+        System.out.println("未能获取订单服务");
+        return;
+    }
+    FactoryOrder factoryOrder=factoryOrderService.get(orderId);
+    if (factoryOrder==null) {
+        System.out.println("订单不存在，可能被删除");
+        return;
+    }
+    String clientId=factoryOrder.getClientId();
+    if (StringUtils.isEmpty(clientId)) {
+        System.out.println("客户标识不允许为空");
+        return;
+    }
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) {
+        System.out.println("未能获取客户服务");
+        return;
+    }
+    Client client=clientService.get(clientId);
+    if (client==null) {
+        System.out.println("客户不存在，可能被删除");
+        return;
+    }
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) {
+         System.out.println("客户编号不允许为空");
+        return;
+    }
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    String qcNo=String.format(
+                           "SB01-%s%s%02d"
+                           ,clientCode
+                           ,DateUtils.formatDate(new Date(),"yyMMdd")
+                           ,dataValueService.getNextNum("qc_fqc_id")
+                   );
+   fqc.setQcNo(qcNo);
+end

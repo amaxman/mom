@@ -1,0 +1,29 @@
+package mom.service.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import mom.service.basic.config.DataValueService;
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+import mom.entity.factory.manufacture.ManuWorkReport;
+
+global ManuWorkReport manuWorkReport;
+
+rule "Manu_Rept_Auto_Id"
+    when
+    then
+    if (manuWorkReport==null) return;
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    String workReptCode=String.format(
+                           "MRep-%s-%s%02d"
+                           ,manuWorkReport.getRepMethodStart()
+                           ,DateUtils.formatDate(new Date(),"yyMMdd")
+                           ,dataValueService.getNextNum("manu_report")
+                   );
+    manuWorkReport.setWorkReptCode(workReptCode);
+end
+

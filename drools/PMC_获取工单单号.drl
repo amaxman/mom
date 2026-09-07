@@ -1,0 +1,56 @@
+package mom.service.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import mom.service.basic.config.DataValueService;
+
+import mom.entity.factory.client.Client;
+import mom.service.factory.client.ClientService;
+
+import mom.entity.factory.order.FactoryOrder;
+import mom.service.factory.order.FactoryOrderService;
+
+import mom.entity.factory.manufacture.FactoryManuPlan;
+import mom.service.factory.manufacture.FactoryManuPlanService
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+global FactoryManuPlan factoryManuPlan;
+
+rule "sys_manuPlanOrderNo"
+    when
+    then
+    if (factoryManuPlan==null) return;
+    String orderId=factoryManuPlan.getOrderId();
+    if (StringUtils.isEmpty(orderId)) return;
+    FactoryOrderService factoryOrderService=SpringUtils.getBean(FactoryOrderService.class);
+    if (factoryOrderService==null) return;
+    FactoryOrder factoryOrder=factoryOrderService.get(orderId);
+    if (factoryOrder==null) return;
+    String clientId=factoryOrder.getClientId();
+    if (StringUtils.isEmpty(clientId)) return;
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) return;
+    Client client=clientService.get(clientId);
+    if (client==null) return;
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) return;
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    Integer planCate=factoryManuPlan.getPlanCate();
+    switch (planCate) {
+        case 1:
+            factoryManuPlan.setPlanOrderNo("S101-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",dataValueService.getNextNum("manuPlan")));
+            break;
+        case 7:
+        case 8:
+            factoryManuPlan.setPlanOrderNo("S103-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",dataValueService.getNextNum("manuPlan")));
+            break;
+        case 5:
+            factoryManuPlan.setPlanOrderNo("S107-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",dataValueService.getNextNum("manuPlan")));
+        default:
+            factoryManuPlan.setPlanOrderNo(IdGen.nextId());
+    }
+end

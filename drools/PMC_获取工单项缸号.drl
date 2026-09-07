@@ -1,0 +1,24 @@
+package mom.service.drl;
+dialect  "java"
+
+import com.jeesite.common.utils.SpringUtils;
+import com.jeesite.common.idgen.IdGen;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import mom.service.basic.config.DataValueService;
+
+import mom.entity.factory.manufacture.FactoryManuPlanDetail;
+import com.jeesite.common.lang.DateUtils;
+import java.util.Date;
+
+global FactoryManuPlanDetail factoryManuPlanDetail;
+global String colorMatrixCode;
+
+rule "sys_manuPlanVatNo"
+    when
+    then
+    if (factoryManuPlanDetail==null) return;
+    if (StringUtils.isEmpty(colorMatrixCode)) return;
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    factoryManuPlanDetail.setVatNo(colorMatrixCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%03d",dataValueService.getNextNum("vatNo")));
+end
