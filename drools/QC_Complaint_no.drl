@@ -1,0 +1,29 @@
+package mom.service.drl;
+import com.jeesite.common.lang.StringUtils
+import mom.service.factory.client.ClientService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.client.Client
+import  mom.entity.factory.qc.Complaint
+import mom.service.basic.config.DataValueService
+import com.jeesite.common.lang.DateUtils
+import java.util.Date
+dialect  "java"
+
+global Complaint complaint;
+
+rule "QC_Complaint_No"
+    when
+    then
+    if (complaint==null) return;
+    if (!complaint.getIsNewRecord()) return;
+    String clientId=complaint.getClientId();
+    if (StringUtils.isEmpty(clientId)) return;
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) return;
+    Client client=clientService.get(clientId);
+    if (client==null) return;
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) return;
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    complaint.setComplaintNo("X901-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+String.format("%02d",dataValueService.getNextNum("qc_complaint")));
+end

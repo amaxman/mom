@@ -1,0 +1,117 @@
+package mom.service.drl;
+dialect  "java"
+
+import mom.entity.factory.proofing.FactProofDetail;
+import mom.service.factory.proofing.FactProofDetailService
+import com.jeesite.common.lang.StringUtils
+import mom.entity.factory.proofing.FactProofCargo
+import com.jeesite.common.utils.SpringUtils
+import mom.service.factory.proofing.FactProofCargoService
+import mom.entity.factory.proofing.FactProofing
+import mom.service.factory.proofing.FactProofingService
+import mom.entity.factory.cargo.CargoDefine
+import mom.service.factory.cargo.CargoDefineService
+import mom.entity.factory.cargo.Cargo
+import mom.service.factory.cargo.CargoService
+import com.jeesite.common.config.Global
+import mom.entity.factory.config.ColorMatrix
+import mom.service.factory.config.ColorMatrixService;
+
+global FactProofDetail factProofDetail
+
+rule "RD_Proof_Cargo_Convert"
+    when
+    then
+    if (factProofDetail==null) throw new Exception("打样明细不允许为空");
+    //#region 打样产品
+    String proofCargoId=factProofDetail.getProofCargoId();
+    if (StringUtils.isEmpty(proofCargoId)) throw new Exception("打样产品标识不允许为空");
+    FactProofCargoService factProofCargoService=SpringUtils.getBean(FactProofCargoService.class);
+    if (factProofCargoService==null) throw new Exception("获取FactProofCargoService异常");
+    FactProofCargo factProofCargo=factProofCargoService.get(proofCargoId);
+    if (factProofCargo==null) throw new Exception("打样产品不存在，可能已经被删除");
+    //#endregion
+
+    //#region 打样申请
+    String proofingId=factProofCargo.getProofingId();
+    if (StringUtils.isEmpty(proofingId)) throw new Exception("打样标识不允许为空");
+    FactProofingService factProofingService=SpringUtils.getBean(FactProofingService.class);
+    if (factProofingService==null) throw new Exception("获取FactProofingService异常");
+    FactProofing factProofing=factProofingService.get(proofingId);
+    if (factProofing==null) throw new Exception("打样申请不存在，可能已经被闪促");
+    //#endregion
+
+    //#region 产品定义
+    String cargoDefineId=factProofCargo.getCargoDefineId();
+    if (StringUtils.isEmpty(cargoDefineId)) throw new Exception("打样产品产品定义标识不存在");
+    CargoDefineService cargoDefineService=SpringUtils.getBean(CargoDefineService.class);
+    if (cargoDefineService==null) throw new Exception("CargoDefineService");
+    CargoDefine cargoDefine=cargoDefineService.get(cargoDefineId);
+    if (cargoDefine==null) throw new Exception("产品定义不存在，可能已经被删除");
+    //#endregion
+
+    //#region 根据品号检查产品是否存在
+    String cargoId=String.format("%s_%s_%s",cargoDefine.getCargoCode(),factProofCargo.getProofCargoCode(),factProofDetail.getProofingCode());
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    if (factProofingService==null) throw new Exception("获取CargoService异常");
+    Cargo cargo=cargoService.getByCargoId(cargoId);
+    if (cargo!=null) throw new Exception("产品编号已经存在");
+    //#endregion
+
+    //#region 产品
+    ColorMatrixService colorMatrixService=SpringUtils.getBean(ColorMatrixService.class);
+    if (colorMatrixService==null) throw new Exception("获取ColorMatrixService异常");
+
+    cargo=new Cargo();
+    cargo.setIsNewRecord(true);
+    cargo.setCateId(cargoDefine.getCateId());
+    cargo.setCargoDefId(cargoDefineId);
+    cargo.setCargoId(cargoId);
+    cargo.setCargoCode(cargoDefine.getCargoCode());
+    cargo.setCargoName(cargoDefine.getCargoName());
+    cargo.setCargoStyle(cargoDefine.getCargoStyle());
+    cargo.setCargoFullName(cargoDefine.getCargoFullName());
+
+    cargo.setProofCode(factProofCargo.getProofCargoCode());	//打样编号
+    cargo.setProofEdition(factProofDetail.getProofingCode());	//定板号
+
+    cargo.setSrcCode("P");
+    cargo.setCargoMetering("");
+    cargo.setCargoMeteringUnit(cargoDefine.getCargoMeteringUnit());
+
+    cargo.setFqc(Global.NO);
+    cargo.setFqc(Global.NO);
+
+    //#region 颜色
+    if (StringUtils.isNotEmpty(factProofCargo.getInternalColorId())) {
+        ColorMatrix colorMatrix=colorMatrixService.get(factProofCargo.getInternalColorId());
+        if (colorMatrix!=null) {
+            cargo.setRgbColor(colorMatrix.getRgbColor());
+            if (StringUtils.isNotEmpty(colorMatrix.getRgbColor())) {
+                if (colorMatrix.getRgbColor().length()>=2) cargo.setRgbR(Integer.parseInt(colorMatrix.getRgbColor().substring(0,2).toUpperCase(),16));
+                if (colorMatrix.getRgbColor().length()>=4) cargo.setRgbG(Integer.parseInt(colorMatrix.getRgbColor().substring(2,4).toUpperCase(),16));
+                if (colorMatrix.getRgbColor().length()>=6) cargo.setRgbB(Integer.parseInt(colorMatrix.getRgbColor().substring(4,6).toUpperCase(),16));
+
+                cargo.setLabColor("");
+                cargo.setLabL(null);
+                cargo.setLabA(null);
+                cargo.setLabB(null);
+            }
+
+
+
+            cargo.setColorCate(colorMatrix.getColorCode());
+            cargo.setShadeRange(colorMatrix.getShadeRange());	//色系
+        }
+
+    }
+
+    //#endregion
+
+    cargo.setClientId(factProofing.getClientId());
+    cargo.setLastVatNo("");
+    cargo.setLastManuPlanId("");
+    cargo.setLastManuPlanDetailId("");
+    cargoService.save(cargo);
+    //#endregion
+end
