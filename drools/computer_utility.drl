@@ -1,0 +1,103 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.HashMap;
+import java.util.Date;
+import com.alibaba.fastjson.JSONObject;
+import com.alibaba.fastjson.JSONObject
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils
+import mom.service.factory.manufacture.UtilityStatService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.manufacture.UtilityStat;
+
+global JSONObject utilityValue;
+global Integer total;
+global Date beginDate;
+global Date endDate;
+
+
+rule "computer_utility"
+    when
+    then
+    JSONObject jsonObjectSum=new JSONObject();
+
+    System.out.println("A1");
+    double amountL=utilityValue.getDoubleValue("L");
+    double amountM=utilityValue.getDoubleValue("M");
+    double amountN=utilityValue.getDoubleValue("N");
+    double amountTotal=utilityValue.getDoubleValue("B")
+        +utilityValue.getDoubleValue("C")
+        +utilityValue.getDoubleValue("D")*0.25
+        +utilityValue.getDoubleValue("E")*0.25;
+
+    double amountO=amountL*1000/amountTotal;
+    double amountP=amountM*1000/amountTotal;
+    double amountQ=amountN/amountTotal;
+
+    System.out.println("汇总数据");
+    System.out.println("汽"+String.format("%.2f",amountO));
+    System.out.println("水"+String.format("%.2f",amountP));
+    System.out.println("电"+String.format("%.2f",amountQ));
+
+    utilityValue.put("O",amountO);
+    utilityValue.put("P",amountO);
+    utilityValue.put("Q",amountQ);
+
+    double realValueO=amountO*218/1000; //实际汽 5.9
+    double realValueP=amountP*4.11/1000;    //实际水   0.81
+    double realValueQ=amountQ*0.7835;   //实际电 1.61
+    System.out.println("实际值(附加信息)");
+    System.out.println("汽"+String.format("%.2f",realValueO));
+    System.out.println("水"+String.format("%.2f",realValueP));
+    System.out.println("电"+String.format("%.2f",realValueQ));
+
+    double x=amountTotal/total/1000; //1.84
+
+    double yWater=264.4*Math.pow(x,-0.442);   // 水
+    double yGas=26.854*Math.pow(x,-0.495);   // 汽
+    double yEle=2.9675*Math.pow(x,-0.617);   // 电
+
+    double valueWater=yWater*4.11/1000; //实际水
+    double valueGas=yGas*218/1000;    //实际汽
+    double valueEle=yEle*0.7835;   //实际电
+
+
+
+    System.out.println("总量:"+String.format("%.2f",amountTotal));
+    System.out.println("数量:"+String.format("%d",total));
+    System.out.println("x:"+String.format("%.2f",x));
+
+    System.out.println("Y值");
+    System.out.println("汽"+String.format("%.2f",yGas));
+    System.out.println("水"+String.format("%.2f",yWater));
+    System.out.println("电"+String.format("%.2f",yEle));
+
+    System.out.println("理论值");
+    System.out.println("汽"+String.format("%.2f",valueGas));
+    System.out.println("水"+String.format("%.2f",valueWater));
+    System.out.println("电"+String.format("%.2f",valueEle));
+
+    System.out.println("Saving utilityStat");
+    UtilityStatService utilityStatService=SpringUtils.getBean(UtilityStatService.class);
+    UtilityStat utilityStat=new UtilityStat();
+    utilityStat.setBeginDate(beginDate);
+    utilityStat.setEndDate(endDate);
+
+    utilityStat.setGasReal(realValueO);
+    utilityStat.setGasTheory(valueGas);
+
+    utilityStat.setWaterReal(realValueP);
+    utilityStat.setWaterTheory(valueWater);
+
+    utilityStat.setEleReal(realValueQ);
+    utilityStat.setEleTheory(valueEle);
+
+    utilityStatService.save(utilityStat);
+    System.out.println("Save utilityStat");
+end

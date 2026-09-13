@@ -1,0 +1,20 @@
+package mom.service.drl;
+dialect  "java";
+
+import com.jeesite.common.msg.EmailConfig;
+
+global EmailConfig emailConfig;
+
+
+rule "getEmailConfig"
+    when
+    then
+    String userId="",userPassword="",smtpAddress="smtp.exmail.qq.com",slSmtpPort="465";
+    emailConfig.setUserId(userId);
+    emailConfig.setUserPassword(userPassword);
+    emailConfig.setSmtpAddress(smtpAddress);
+    //emailConfig.setSmtpPort("25");
+    emailConfig.setSmtpPort("587");
+    emailConfig.setSslSmtpPort("465");
+    emailConfig.setSslOnConnect(true);
+end

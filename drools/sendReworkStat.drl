@@ -1,0 +1,102 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.HashMap;
+import java.util.Date;
+import com.alibaba.fastjson.JSONObject;
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.modules.setting.quartz.util.spring.SpringUtils;
+import mom.entity.factory.manufacture.UtilityStat;
+import mom.service.factory.manufacture.UtilityStatService;
+import mom.entity.factory.stat.ReworkStat;
+import com.jeesite.common.msg.EmailConfig
+import java.util.ArrayList
+import com.jeesite.common.lang.DateUtils;
+
+
+global String subject;
+global List<ReworkStat> reworkStatList;
+global List emailAttachmentList;
+global List imageFileList;
+global EmailConfig emailConfig;
+
+
+rule "sendReworkStat"
+    when
+    then
+
+    if (emailConfig==null) return;
+
+    String html="<html>";
+
+    html+="<style>";
+    html+=".headTitle{font-size:18px}.foot_internal{font-size:16px;color:red}.foot_not_replay{font-size:12px;color:#AEAFAD}.td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}.td_item_data{font-size:12px;border:0}.td_item_key{width:80px}.td_item_value{width:100px}.center{flex-direction:column;text-align:center}.left{flex-direction:column;text-align:left}";
+    html+="</style>";
+
+    html+="<body>";
+
+    html+="<table>";
+
+    html+="<tr>";
+    html+="<td colspan='7' class='center'><span class='headTitle'>"+subject+"</td>";
+    html+="</tr>";
+
+    html+="<tr>";
+    html+="<td class='td_item_title td_item_key center'>开始时间</td>";
+    html+="<td class='td_item_title td_item_value center'>结束时间</td>";
+    html+="<td class='td_item_title td_item_value center'>年序号</td>";
+    html+="<td class='td_item_title td_item_value center'>周序号</td>";
+    html+="<td class='td_item_title td_item_value center'>返工数(T)</td>";
+    html+="<td class='td_item_title td_item_value center'>总量(T)</td>";
+    html+="<td class='td_item_title td_item_value center'>返工率(%)</td>";
+    html+="</tr>";
+
+    List<String> listContent=new ArrayList<>();
+
+    for (Object obj:reworkStatList) {
+        if (obj==null) continue;
+        if (! (obj instanceof ReworkStat)) continue;
+        ReworkStat reworkStat=(ReworkStat)obj;
+        String trHtml="";
+
+        trHtml+="<tr>";
+        trHtml+=String.format("<td class='td_item_data center'>%s</td>",DateUtils.formatDate(reworkStat.getBeginTime(),"yyyy-MM-dd"));
+        trHtml+=String.format("<td class='td_item_data center'>%s</td>",DateUtils.formatDate(reworkStat.getEndTime(),"yyyy-MM-dd"));
+        trHtml+=String.format("<td class='td_item_data center'>%d</td>",reworkStat.getYearNum());
+        trHtml+=String.format("<td class='td_item_data center'>%d</td>",reworkStat.getWeekNum());
+        trHtml+=String.format("<td class='td_item_data center'>%.3f</td>",reworkStat.getReworkTotal()/1000);
+        trHtml+=String.format("<td class='td_item_data center'>%.3f</td>",reworkStat.getWorkTotal()/1000);
+        trHtml+=String.format("<td class='td_item_data center'>%.3f</td>",reworkStat.getReworkPercent());
+        trHtml+="</tr>";
+        listContent.add(trHtml);
+    }
+    if (listContent.isEmpty()) return;
+    html+=String.join("",listContent);
+    html+="</table>";
+    html+="</body>";
+
+    html+="</html>";
+
+    EmailAddress senderEmailAddress=new EmailAddress("","");
+    List<EmailAddress> emailAddressList=Arrays.asList(
+        new EmailAddress("","")
+    );
+
+    EmailUtils.sendWithImageAtt(
+        emailConfig,
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        html,
+        emailAttachmentList,
+        imageFileList
+    );
+
+
+end

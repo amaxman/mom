@@ -1,0 +1,81 @@
+package mom.service.drl;
+dialect  "java";
+
+
+import java.util.List;
+import java.util.HashMap;
+import java.util.Date;
+import com.alibaba.fastjson.JSONObject;
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.modules.setting.quartz.util.spring.SpringUtils;
+
+import java.util.ArrayList
+import com.jeesite.common.lang.DateUtils;
+import mom.entity.factory.manufacture.FactoryManuPlan;
+import mom.service.factory.manufacture.FactoryManuPlanService;
+import com.jeesite.common.lang.StringUtils
+import com.jeesite.common.idgen.IdGen
+import com.jeesite.common.entity.Page;
+
+global Date date;
+global Integer manuPlanCate;
+global FactoryManuPlan factoryManuPlan;
+
+
+rule "manuPlan_gen_order_num"
+    when
+    then
+    factoryManuPlan.setPlanOrderNo(IdGen.nextId());
+    if (date==null || manuPlanCate==null) return;
+    Integer codeNum=Integer.parseInt(DateUtils.formatDate(date,"YYMMdd")+"00");
+    System.out.println("code num:==================="+codeNum);
+    switch (manuPlanCate) {
+        case 1:
+        case 5:
+            factoryManuPlan.setPlanOrderNo("S101-YGJ"+(codeNum+1));
+            break;
+        case 7:
+        case 8:
+            factoryManuPlan.setPlanOrderNo("S103-YGJ"+(codeNum+1));
+            break;
+    }
+    System.out.println(manuPlanCate+"==================="+factoryManuPlan.getPlanOrderNo());
+
+    FactoryManuPlanService factoryManuPlanService=SpringUtils.getBean(FactoryManuPlanService.class);
+    FactoryManuPlan factoryManuPlanWhere=new FactoryManuPlan();
+    Date beginTime=DateUtils.getOfDayFirst(date),endTime=DateUtils.getOfDayLast(date);
+
+    Page<FactoryManuPlan> page=factoryManuPlanService.findPageByTimeArea(manuPlanCate,beginTime,endTime,1,1,"a.plan_order_no desc");
+    if (page==null || page.getList()==null) return;
+    List<FactoryManuPlan> list=page.getList();
+    if (list.isEmpty()) return;
+    FactoryManuPlan factoryManuPlanFirst=list.get(0);
+    if (factoryManuPlanFirst==null) return;
+
+
+    try {
+        String manuPlanCode=factoryManuPlanFirst.getPlanOrderNo();
+            manuPlanCode=manuPlanCode.substring(manuPlanCode.length()-8);
+        codeNum=Integer.parseInt(manuPlanCode);
+    } catch (Exception ex) {
+        return;
+    }
+    codeNum++;
+    System.out.println("new code num:==================="+codeNum);
+
+    switch (manuPlanCate) {
+        case 1:
+        case 5:
+            factoryManuPlan.setPlanOrderNo("S101-YGJ"+codeNum);
+            break;
+        case 7:
+        case 8:
+            factoryManuPlan.setPlanOrderNo("S103-YGJ"+codeNum);
+            break;
+    }
+end

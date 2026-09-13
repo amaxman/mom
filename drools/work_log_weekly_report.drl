@@ -1,0 +1,138 @@
+package mom.service.drl;
+dialect  "java"
+
+import java.util.List;
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+import mom.service.basic.develop.DevAppService;
+import com.jeesite.common.utils.SpringUtils;
+import mom.entity.basic.develop.DevApp;
+import com.jeesite.common.lang.StringUtils;
+import java.util.Date;
+import java.util.stream.Collectors;
+import com.jeesite.common.config.Global;
+import com.jeesite.common.utils.excel.ExcelExportEx;
+import com.jeesite.common.utils.excel.annotation.ExcelField;
+import com.jeesite.common.lang.DateUtils;
+import com.jeesite.common.idgen.IdGen;
+import java.io.File;
+import java.util.ArrayList
+import mom.service.basic.work.WorkLogService;
+import mom.entity.basic.work.WorkLog;
+
+global EmailConfig emailConfig;
+global String staffId;
+global String staffName;
+global List emailAddressList;
+
+function List<String> getContent(List  workLogList) {
+    List<String> contentList=new ArrayList<>();
+    int index=1;
+    for(Object obj:workLogList) {
+        if (!(obj instanceof WorkLog)) continue;
+        WorkLog workLog=(WorkLog)obj;
+        Date itemStartDate=workLog.getStartDate(),itemEndDate=workLog.getEndDate();
+        String itemBefore=String.valueOf(index);
+        if (itemStartDate!=null && itemEndDate!=null) {
+            itemBefore+=String.format(".%s至%s",DateUtils.formatDate(itemStartDate,"MM-dd"),DateUtils.formatDate(itemEndDate,"MM月dd日"));
+        } else if (itemStartDate!=null) {
+            itemBefore+=String.format(".%s开始",DateUtils.formatDate(itemStartDate,"MM-dd"));
+        } else if (itemStartDate!=null) {
+          itemBefore+=String.format(".%s之前",DateUtils.formatDate(itemEndDate,"MM-dd"));
+        } else {
+            itemBefore+=".";
+        }
+
+        Integer workPercent=workLog.getWorkPercent();
+        String itemAfter="";
+        if (workPercent!=null) {
+            if (workPercent==0) {
+                itemAfter+="未开始";
+            } else if (workPercent==100) {
+                itemAfter+="已完成";
+            } else {
+                itemAfter+=String.format("%d%%",workPercent);
+            }
+        } else {
+            itemAfter+="未开始";
+        }
+
+        contentList.add("<tr><td style='padding-left:20px;'>"+itemBefore+"("+itemAfter+"):"+workLog.getWorkContent()+"<td></tr>");
+        index++;
+
+    }
+
+    return contentList;
+}
+
+rule "work_log_weekly_report"
+    when
+    then
+    if (StringUtils.isEmpty(staffId)) return;
+
+    WorkLogService workLogService=SpringUtils.getBean(WorkLogService.class);
+    Date currentTime= DateUtils.getOfDayLast(new Date());
+    int dayNumOfWeek=DateUtils.getDayOfWeek(currentTime);
+    if (dayNumOfWeek!=7) currentTime=DateUtils.addDays(currentTime,-dayNumOfWeek);
+    Date startTime=DateUtils.getOfDayFirst(DateUtils.addDays(currentTime,-6)),endTime=DateUtils.getOfDayLast(currentTime);
+    List<WorkLog> workLogListThisWeek=workLogService.findListByTimeArea(staffId,startTime,endTime);
+    Date startTimeNextWeek=DateUtils.addWeeks(startTime,1),endTimeNextWeek=DateUtils.addWeeks(endTime,1);
+    List<WorkLog> workLogListNextWeek=workLogService.findListByTimeArea(staffId,startTimeNextWeek,endTimeNextWeek);
+    if ((workLogListThisWeek==null || workLogListThisWeek.isEmpty()) && (workLogListNextWeek==null || workLogListNextWeek.isEmpty())) return;
+
+    String subject=String.format("%s%s至%s周报",staffName,DateUtils.formatDate(startTime,"yyyy年MM月dd日"),DateUtils.formatDate(endTime,"MM月dd日"));
+
+    String html="<html>";
+
+    html+="<style>";
+    html+="td{font-size:18px}.headTitle{font-size:18px}.foot_internal{font-size:16px;color:red}.foot_not_replay{font-size:12px;color:#AEAFAD}.td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}.td_item_data{font-size:12px;border:0}.td_item_key{width:100px}.td_item_value{width:500px}.center{flex-direction:column;text-align:center}.left{flex-direction:column;text-align:left}";
+    html+="</style>";
+    html+="<body>";
+    List<String> content=new ArrayList<>();
+
+    html+="<table style='min-width:500px;width:100%'>";
+    if (!workLogListThisWeek.isEmpty()) {
+        content.add(String.format("<tr><td>本周(%s-%s)工作如下：<td></tr>",DateUtils.formatDate(startTime,"MMdd"),DateUtils.formatDate(endTime,"MMdd")));
+        content.addAll(getContent(workLogListThisWeek));
+    }
+
+    if (!workLogListNextWeek.isEmpty()) {
+        if (!content.isEmpty()) {
+            content.add("<tr><td style='height:20px;'>&nbsp;<td></tr>");
+        }
+        content.add(String.format("<tr><td>下周(%s-%s)计划如下：<td></tr>",DateUtils.formatDate(startTimeNextWeek,"MMdd"),DateUtils.formatDate(endTimeNextWeek,"MMdd")));
+        content.addAll(getContent(workLogListNextWeek));
+    }
+
+    html+=String.join("",content);
+    html+="</table>";
+    html+="<p><span class='foot_internal'>内部数据，请注意保密</span></p>";
+    html+="<p><span class='foot_not_replay'>系统邮件，请勿直接回复</span></p>";
+    html+="</body>";
+    html+="</html>";
+
+    EmailAddress senderEmailAddress=new EmailAddress("","");
+
+    List<EmailAttachment> emailAttachmentList=new ArrayList<>();
+    emailAddressList.addAll(Arrays.asList(
+        new EmailAddress("","")
+    ));
+
+    EmailUtils.sendWithImageAtt(
+            emailConfig,
+            senderEmailAddress,
+            emailAddressList,
+            subject,
+            html,
+            new ArrayList<>(),
+            new ArrayList<>()
+        );
+
+
+
+
+
+end

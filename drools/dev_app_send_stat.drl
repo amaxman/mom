@@ -1,0 +1,117 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+import mom.service.basic.develop.DevAppService;
+import com.jeesite.common.utils.SpringUtils;
+import mom.entity.basic.develop.DevApp;
+import com.jeesite.common.lang.StringUtils;
+import java.util.Date;
+import java.util.stream.Collectors;
+import com.jeesite.common.config.Global;
+import com.jeesite.common.utils.excel.ExcelExportEx;
+import com.jeesite.common.utils.excel.annotation.ExcelField;
+import com.jeesite.common.lang.DateUtils;
+import com.jeesite.common.idgen.IdGen;
+import java.io.File;
+import java.util.ArrayList;
+
+global EmailConfig emailConfig;
+
+rule "dev_app_send_stat"
+    when
+    then
+    DevAppService devAppService=SpringUtils.getBean(DevAppService.class);
+    DevApp where=new DevApp();
+    Date currentTime=new Date();
+    List<DevApp> devAppList=devAppService.findList(where);
+    if (devAppList.isEmpty()) return;
+    List<DevApp> devAppListing=devAppList.stream()
+        .filter(p->p.getStartDateReal()!=null && !StringUtils.equalsIgnoreCase(p.getCompleted(),Global.YES))
+        .collect(Collectors.toList());  //正在进行中，未完成
+    List<DevApp> devAppListed=devAppList.stream()
+                .filter(p->p.getStartDateReal()!=null && StringUtils.equalsIgnoreCase(p.getCompleted(),Global.YES))
+                .collect(Collectors.toList());  //已经完成
+    List<DevApp> devAppListPlan=devAppList.stream()
+                                .filter(p->p.getStartDateReal()==null)
+                                .collect(Collectors.toList());  //其他状态
+    ExcelExportEx excelExportEx=null;
+    if (!devAppListPlan.isEmpty()) {
+       excelExportEx=new ExcelExportEx("功能列表",DevApp.class);
+       excelExportEx.setDataList(devAppListPlan);
+    }
+
+    if (!devAppListing.isEmpty()) {
+        if (excelExportEx==null) {
+            excelExportEx=new ExcelExportEx("开发中",DevApp.class);
+            excelExportEx.setDataList(devAppListing);
+        } else {
+            excelExportEx.createSheet("开发中","开发中",DevApp.class,ExcelField.Type.EXPORT);
+            excelExportEx.setDataList(devAppListing);
+        }
+    }
+
+    if (!devAppListed.isEmpty()) {
+        if (excelExportEx==null) {
+            excelExportEx=new ExcelExportEx("已完成",DevApp.class);
+            excelExportEx.setDataList(devAppListed);
+        } else {
+            excelExportEx.createSheet("已完成","已完成",DevApp.class,ExcelField.Type.EXPORT);
+            excelExportEx.setDataList(devAppListed);
+        }
+    }
+    String foldPath=Global.getUserfilesBaseDir("/fileupload/")+DateUtils.formatDate(new Date(),"yyyyMM")+"/";
+    File file=new File(foldPath);
+    if (!file.exists()) file.mkdirs();
+    String filePathXLS= foldPath+ IdGen.nextId()+".xlsx";
+    excelExportEx.writeFile(filePathXLS);
+
+    List<EmailAttachment> emailAttachmentList=new ArrayList<>();
+    EmailAttachment emailAttachment=new EmailAttachment();
+    emailAttachment.setDescription("功能列表.xlsx");
+    emailAttachment.setName("功能列表.xlsx");
+    emailAttachment.setPath(filePathXLS);
+    emailAttachmentList.add(emailAttachment);
+
+
+    EmailAddress senderEmailAddress=new EmailAddress("meshv@yarnscolors.com","功能申请汇总");
+    List<EmailAddress> emailAddressList=Arrays.asList(
+        new EmailAddress("7887652@qq.com","陶亚军")
+    );
+
+
+
+    String html="<html>";
+
+    html+="<style>";
+    html+=".headTitle{font-size:18px}.foot_internal{font-size:16px;color:red}.foot_not_replay{font-size:12px;color:#AEAFAD}.td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}.td_item_data{font-size:12px;border:0}.td_item_key{width:100px}.td_item_value{width:500px}.center{flex-direction:column;text-align:center}.left{flex-direction:column;text-align:left}";
+    html+="</style>";
+    html+="<body>";
+
+    html+="<p><span class='foot_internal'>内部数据，请注意保密</span></p>";
+    html+="<p><span class='foot_not_replay'>系统邮件，请勿直接回复</span></p>";
+    html+="</body>";
+    html+="</html>";
+
+    String subject="功能汇总";
+    String content=html;
+
+    EmailUtils.sendWithAttach(
+        emailConfig.getUserId(),
+        emailConfig.getUserPassword(),
+        emailConfig.getSmtpAddress(),
+        emailConfig.getSmtpPort(),
+        emailConfig.getSslOnConnect(),
+        emailConfig.getSslSmtpPort(),
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        content,
+        emailAttachmentList
+    );
+end

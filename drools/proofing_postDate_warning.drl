@@ -1,0 +1,42 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+
+global EmailConfig emailConfig;
+global String subject;
+global String content;
+global List emailAttachmentList;
+
+rule "proofing_postDate_warning"
+    when
+    then
+    String userId="amaxman",userPassword="",smtpAddress="mail.163.com",slSmtpPort="465";
+    String smtpPort="25";
+    Boolean sslOnConnect=false;
+    EmailAddress senderEmailAddress=new EmailAddress("amaxman@163.com","打样交期预警");
+    List<EmailAddress> emailAddressList=Arrays.asList(
+        new EmailAddress("amaxman@163.com","amaxman")
+    );
+
+    System.out.println("===================="+String.valueOf(emailAttachmentList.size())+"======================");
+
+    EmailUtils.sendWithAttach(
+        emailConfig.getUserId(),
+        emailConfig.getUserPassword(),
+        emailConfig.getSmtpAddress(),
+        emailConfig.getSmtpPort(),
+        emailConfig.getSslOnConnect(),
+        emailConfig.getSslSmtpPort(),
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        content,
+        emailAttachmentList
+    );
+end

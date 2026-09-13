@@ -1,0 +1,85 @@
+package views.modules.factory.manufacture;
+dialect  "java";
+
+
+import java.util.List;
+import java.util.Date;
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+import com.jeesite.common.lang.DateUtils;
+import java.util.ArrayList
+
+global String subject;
+global EmailConfig emailConfig;
+global List emailAttachmentList;
+
+
+rule "send_client_portrait_overdue"
+    when
+    then
+
+
+    String html="<html>";
+
+    html+="<style>";
+    html+=".headTitle{font-size:18px}"
+        +".foot_internal{font-size:16px;color:red}"
+        +".foot_not_replay{font-size:12px;color:#AEAFAD}"
+        +".tr_head {height: 40px;}"
+        +" tr {height: 30px; }"
+        +" .td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}"
+        +" .td_item_data{font-size:12px;border:0}"
+        +" .td_item_key{width:200px}"
+        +" .td_item_value{width:80px}"
+        +" .center{flex-direction:column;text-align:center}"
+        +" .left{flex-direction:column;text-align:left}"
+        +".colored-row td:first-child {border-top-left-radius: 10px;border-right: 1px solid #CCC;}"
+        +".colored-row td:last-child{border-top-right-radius: 10px;}"
+        +".data-row td:first-child{border-top-left-radius: 0px;border-left: 1px solid #CCC;}"
+        +".data-row td:last-child{border-top-right-radius: 0px;border-right: 1px solid #CCC;}"
+        +".data-row td{border-bottom: 1px solid #CCC;}"
+        ;
+    html+="</style>";
+
+    html+="<body>";
+
+    html+="<table style='border-spacing: 0px;' class='colored-row'>";
+
+    html+="<tr>";
+    html+="<td class='center' style='border-right: 0px !important;;'><span class='headTitle'>"+subject+"</span></td>";
+    html+="</tr>";
+
+    html+="</table>";
+
+    html+="<p><span class='foot_internal'>内部数据，请注意保密</span></p>";
+        html+="<p><span class='foot_not_replay'>系统邮件，请勿直接回复</span></p>";
+
+    html+="</body>";
+
+    html+="</html>";
+
+    EmailAddress senderEmailAddress=new EmailAddress("","");
+
+
+    List<EmailAddress> emailAddressList=
+        Arrays.asList(
+            new EmailAddress("","")
+        );
+
+    EmailUtils.sendWithImageAtt(
+        emailConfig,
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        html,
+        emailAttachmentList,
+        new ArrayList<>()
+    );
+
+
+end

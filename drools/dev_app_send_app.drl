@@ -1,0 +1,109 @@
+package mom.modules.drl;
+dialect  "java";
+
+
+import java.util.List;
+import java.util.Date;
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+import com.jeesite.common.lang.DateUtils;
+import java.util.ArrayList;
+import java.util.ArrayList;
+
+
+global DevApp devApp;
+global List emailAddressList;
+global EmailConfig emailConfig;
+
+
+rule "dev_app_send_app"
+    when
+    then
+
+    if (devApp==null) return;
+
+    String html="<html>";
+
+    html+="<style>";
+    html+=".headTitle{font-size:18px}.foot_internal{font-size:16px;color:red}.foot_not_replay{font-size:12px;color:#AEAFAD}.td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}.td_item_data{font-size:12px;border:0}.td_item_key{width:100px}.td_item_value{width:500px}.center{flex-direction:column;text-align:center}.left{flex-direction:column;text-align:left}";
+    html+="</style>";
+
+    html+="<body>";
+
+    html+="<table>";
+
+    html+="<tr>";
+    html+="<td class='td_item_title td_item_key center'>主题</td>";
+    html+="<td class='td_item_data'>"+devApp.getSubject()+"</td>";
+    html+="</tr>";
+
+    html+="<tr>";
+    html+="<td class='td_item_title td_item_key center'>功能</td>";
+    html+="<td class='td_item_data'>"+devApp.getDesc()+"</td>";
+    html+="</tr>";
+
+    html+="<tr>";
+    html+="<td class='td_item_title td_item_key center'>商业价值</td>";
+    html+="<td class='td_item_data'>"+devApp.getBussinessValue()+"</td>";
+    html+="</tr>";
+
+    if (devApp.getOnlineDatePlan()!=null) {
+        html+="<tr>";
+        html+="<td class='td_item_title td_item_key center'>上线日期</td>";
+        html+="<td class='td_item_data'>"+DateUtils.formatDate(devApp.getOnlineDatePlan(),"yyyy-MM-dd")+"</td>";
+        html+="</tr>";
+    }
+
+    if (devApp.getDevMoney()!=null) {
+        html+="<tr>";
+        html+="<td class='td_item_title td_item_key center'>研发费用</td>";
+        html+="<td class='td_item_data'>"+(devApp.getDevMoney()==0?"未指定":String.format("%.3f万元",devApp.getDevMoney()*1d/10000))+"</td>";
+        html+="</tr>";
+    }
+
+
+    html+="<tr>";
+    html+="<td class='td_item_title td_item_key center'>申请人</td>";
+    html+="<td class='td_item_data'>"+devApp.getAppStaffName()+"</td>";
+    html+="</tr>";
+
+    if (devApp.getAppDate()!=null) {
+        html+="<tr>";
+        html+="<td class='td_item_title td_item_key center'>申请日期</td>";
+        html+="<td class='td_item_data'>"+DateUtils.formatDate(devApp.getAppDate(),"yyyy-MM-dd")+"</td>";
+        html+="</tr>";
+    }
+
+    html+="<tr>";
+    html+="<td class='td_item_title td_item_key center'>创建日期</td>";
+    html+="<td class='td_item_data'>"+DateUtils.formatDate(devApp.getCreateDate(),"yyyy-MM-dd")+"</td>";
+    html+="</tr>";
+
+
+    html+="</table>";
+    html+="</body>";
+
+    html+="</html>";
+
+    EmailAddress senderEmailAddress=new EmailAddress("","功能申请通知");
+    emailAddressList.addAll(Arrays.asList(
+        new EmailAddress("","")
+    ));
+
+    EmailUtils.sendWithImageAtt(
+        emailConfig,
+        senderEmailAddress,
+        emailAddressList,
+        "功能申请:"+devApp.getSubject(),
+        html,
+        new ArrayList<>(),
+        new ArrayList<>()
+    );
+
+
+end

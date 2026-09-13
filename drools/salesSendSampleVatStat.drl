@@ -1,0 +1,228 @@
+package mom.service.drl;
+dialect  "java";
+
+
+import java.util.List;
+import java.util.Date;
+import java.util.stream.Collectors;
+import java.util.Comparator;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+import com.jeesite.common.lang.DateUtils;
+import java.util.ArrayList;
+import com.jeesite.common.lang.StringUtils;
+import com.jeesite.common.utils.SpringUtils;
+import java.util.Map;
+import java.util.HashMap
+import com.jeesite.common.mybatis.mapper.query.QueryType
+import com.jeesite.common.utils.excel.ExcelExport
+import com.jeesite.common.config.Global;
+import com.jeesite.common.idgen.IdGen;
+import java.io.File
+import com.jeesite.common.utils.excel.ExcelExportEx
+import org.apache.poi.ss.usermodel.Row
+import org.apache.poi.ss.util.CellRangeAddress
+import java.lang.reflect.Constructor
+import com.jeesite.common.utils.excel.annotation.ExcelFields
+import com.jeesite.common.utils.excel.annotation.ExcelField
+import org.apache.poi.ss.usermodel.CellStyle
+import org.apache.poi.ss.usermodel.Font
+import org.apache.poi.ss.usermodel.IndexedColors
+import org.apache.poi.ss.usermodel.BorderStyle
+import mom.service.factory.client.ClientService
+import mom.entity.factory.order.FactoryOrder
+import mom.entity.factory.client.Client
+import mom.service.factory.order.FactoryOrderDetailService
+import mom.entity.factory.order.FactoryOrderDetail
+import mom.service.factory.cargo.CargoService
+import mom.entity.factory.cargo.Cargo
+import mom.view.factory.quartz.entity.ClientSampleVatStat
+import mom.view.factory.quartz.SalesQuart
+import mom.view.factory.quartz.entity.SampleVatAppend
+
+global List emailAddressList;
+global EmailConfig emailConfig;
+
+rule "salesSendSampleVatStat"
+when
+then
+
+    //#region 获取时间段
+    Date currentTime=new Date();
+    Date beginTime= DateUtils.addMonths(currentTime,-6);
+    beginTime=DateUtils.getOfDayFirst(beginTime);
+    //#endregion
+
+    //#region 获取客户列表
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    FactoryOrder factoryOrder=new FactoryOrder();
+    factoryOrder.setBeginTime(beginTime);
+    factoryOrder.setEndTime(currentTime);
+    List<Client> clientList=clientService.findList4SampleVat(factoryOrder);
+    if (clientList==null || clientList.isEmpty()) throw new Exception(
+            String.format(
+                    "%s-%s时间范围内未发现客户订单数据"
+                    ,DateUtils.formatDate(beginTime,"yyyy-MM-dd HH:mm")
+                    ,DateUtils.formatDate(currentTime,"yyyy-MM-dd HH:mm:ss")
+            )
+    );
+    //#endregion
+
+    //#region 获取所有订单明细数据
+    FactoryOrderDetailService factoryOrderDetailService=SpringUtils.getBean(FactoryOrderDetailService.class);
+    List<String> clinetIdList=clientList.stream().map(p->p.getId()).collect(Collectors.toList());
+    List<FactoryOrderDetail> factoryOrderDetailList=factoryOrderDetailService.getAllOrderDetailByClientIdList(
+            clinetIdList,
+            factoryOrder.getBeginTime(),
+            factoryOrder.getEndTime());
+    //#endregion
+
+    //#reigon 获取商品数据
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    List<String> cargoIdList=factoryOrderDetailList.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+    List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
+    //#endregion
+
+    //#region 分析汇总数据
+    SalesQuart salesQuart=SpringUtils.getBean(SalesQuart.class);
+    List<ClientSampleVatStat> clientSampleVatStatList=salesQuart.getClientSampleVatStat(clientList,factoryOrderDetailList,cargoList,true);
+    clientSampleVatStatList=clientSampleVatStatList.stream().sorted(Comparator.comparing(ClientSampleVatStat::getOrderDetailTotal).reversed()).collect(Collectors.toList());
+    //#endregion
+
+    //#region 生成Excel
+    ExcelExportEx excelExportEx=new ExcelExportEx("样缸追缸",ClientSampleVatStat.class);
+    excelExportEx.setDataList(clientSampleVatStatList);
+    String filePathXLS= Global.getUserfilesBaseDir("/fileupload/tmp/");
+    File file=new File(filePathXLS);
+    if (!file.exists()) file.mkdirs();
+    String xlsPath=filePathXLS+ IdGen.nextId()+".xlsx";
+
+    //#endreigon
+
+    //#regon 获取最大列数
+    int colLength=0;
+    Constructor<?>[] cs = ClientSampleVatStat.class.getConstructors();
+    int clzLength=cs.length,index=0;
+    while (index < clzLength) {
+        Constructor<?> c = cs[0];
+         ExcelFields efs = (ExcelFields)c.getAnnotation(ExcelFields.class);
+         ExcelField[] var12 = efs.value();
+         colLength+=var12.length;
+         index++;
+    }
+    System.out.println("colLength=================>"+colLength);
+    //#endregion
+
+    //#region 尾部追加提示
+    CellStyle footStyle=excelExportEx.getWorkbook().createCellStyle();
+    footStyle.cloneStyleFrom(excelExportEx.getStyles().get("data"));
+
+    footStyle.setBorderRight(BorderStyle.THIN);
+    footStyle.setRightBorderColor(IndexedColors.GREY_50_PERCENT.getIndex());
+    footStyle.setBorderLeft(BorderStyle.THIN);
+    footStyle.setLeftBorderColor(IndexedColors.GREY_50_PERCENT.getIndex());
+    footStyle.setBorderTop(BorderStyle.THIN);
+    footStyle.setTopBorderColor(IndexedColors.GREY_50_PERCENT.getIndex());
+    footStyle.setBorderBottom(BorderStyle.THIN);
+    footStyle.setBottomBorderColor(IndexedColors.GREY_50_PERCENT.getIndex());
+
+    Font footFont = excelExportEx.getWorkbook().createFont();
+    footFont.setFontName("Arial");
+    footFont.setFontHeightInPoints((short)10);
+    footFont.setBold(false);
+    footFont.setColor(IndexedColors.GREY_50_PERCENT.getIndex());
+    footStyle.setFont(footFont);
+
+    excelExportEx.addRow();
+    List<String> footStrList=Arrays.asList(
+            String.format("时间:%s至%s",DateUtils.formatDate(beginTime,"yyyy年M月d日"),DateUtils.formatDate(currentTime,"yyyy年M月d日")),
+            "样缸:重量不大于30公斤的单笔订单项","笔数：同类别订单项数量"
+            ,"订单量:同类别订单项重量合计"
+            ,"产品数:同类别产品定义，与颜色（打样信息无关）"
+            ,"已追缸:订单项重量大于30公斤或已包含在样缸中"
+            ,"未追缸:物料标识（含打样信息）包含于样缸中且物料标识不包含于已追缸中"
+            );
+    for (String footStr:footStrList) {
+        Row row=excelExportEx.addRow();
+            excelExportEx.addCell(
+                    row
+                    ,0
+                    ,footStr);
+            index=0;
+            while (index<colLength) {
+                excelExportEx.setCellStyle(row,index,footStyle);
+                index++;
+            }
+
+
+        excelExportEx.getSheet().addMergedRegion(new CellRangeAddress(row.getRowNum(), row.getRowNum(),0, colLength-1));
+    }
+
+    //#endregion
+
+    //#region 导出明细
+    for (ClientSampleVatStat item:clientSampleVatStatList) {
+        String compName=item.getCompName();
+        List<SampleVatAppend> sampleVatAppendList=item.getSampleVatAppendList();
+        if (sampleVatAppendList.isEmpty()) continue;
+        excelExportEx.createSheet(compName,compName+"订单项明细",SampleVatAppend.class,ExcelField.Type.EXPORT);
+        excelExportEx.setDataList(sampleVatAppendList);
+    }
+    //#endregion
+
+    excelExportEx.writeFile(xlsPath);
+
+    String fileName="样缸追缸汇总"+DateUtils.formatDate(currentTime,"yyyyMMddHHmmss")+".xlsx";
+    List<EmailAttachment> emailAttachmentList=new ArrayList<>();
+    EmailAttachment emailAttachment=new EmailAttachment();
+    emailAttachment.setDescription(fileName);
+    emailAttachment.setName(fileName);
+    emailAttachment.setPath(xlsPath);
+    emailAttachmentList.add(emailAttachment);
+
+    EmailAddress senderEmailAddress=new EmailAddress("meshv@yarnscolors.com","样缸追缸");
+    List<EmailAddress> _emailAddressList=Arrays.asList(
+        new EmailAddress("Taoyj@yarnscolors.com","HV_NBD_陶亚军")
+    );
+    if (emailAddressList==null) emailAddressList=new ArrayList();
+    emailAddressList.addAll(Arrays.asList(
+        new EmailAddress("7887652@qq.com","HV_NBD_陶亚军")
+    ));
+
+    String html="<html>";
+
+    html+="<style>";
+    html+=".headTitle{font-size:18px}.foot_internal{font-size:16px;color:red}.foot_not_replay{font-size:12px;color:#AEAFAD}.td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}.td_item_data{font-size:12px;border:0}.td_item_key{width:100px}.td_item_value{width:500px}.center{flex-direction:column;text-align:center}.left{flex-direction:column;text-align:left}";
+    html+="</style>";
+    html+="<body>";
+    html+="<p>"+String.format("%s至%s样缸追缸汇总",DateUtils.formatDate(beginTime,"yyyy年MM月dd日"),DateUtils.formatDate(currentTime,"yyyy年MM月dd日"))+"</p>";
+    html+="<p><span class='foot_internal'>内部数据，请注意保密</span></p>";
+    html+="<p><span class='foot_not_replay'>系统邮件，请勿直接回复</span></p>";
+    html+="</body>";
+    html+="</html>";
+
+    String subject="样缸追缸汇总";
+    String content=html;
+
+    EmailUtils.sendWithAttach(
+            emailConfig.getUserId(),
+            emailConfig.getUserPassword(),
+            emailConfig.getSmtpAddress(),
+            emailConfig.getSmtpPort(),
+            emailConfig.getSslOnConnect(),
+            emailConfig.getSslSmtpPort(),
+            senderEmailAddress,
+            emailAddressList,
+            subject,
+            content,
+            emailAttachmentList
+        );
+
+    File fileXLS=new File(xlsPath);
+    fileXLS.delete();
+
+end

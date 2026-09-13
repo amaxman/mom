@@ -1,0 +1,37 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.HashMap;
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.alibaba.fastjson.JSONObject
+import mom.service.factory.stock.FactStockPositionService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.stock.FactStockPosition;
+
+global List stockPositionList;
+
+rule "Manu_rework_stock_position_list"
+    when
+    then
+    List<String> stockCodeExcept=Arrays.asList("S03L","S03N");
+    FactStockPosition factStockPosition=new FactStockPosition();
+    factStockPosition.setStockId("S");
+
+    FactStockPositionService factStockPositionService=SpringUtils.getBean(FactStockPositionService.class);
+    List<FactStockPosition> factStockPositionList=factStockPositionService.findList(factStockPosition);
+    List<FactStockPosition> _stockPositionList=factStockPositionList.stream()
+        .filter(p->
+        p.getStockPositionCode()!=null &&
+        (
+            p.getStockPositionCode().indexOf("S03")==0 ||
+            p.getStockPositionCode().indexOf("S05")==0 ||
+            p.getStockPositionCode().indexOf("S06")==0 ||
+            p.getStockPositionCode().indexOf("S09")==0
+        ) &&
+        !stockCodeExcept.contains(p.getStockPositionCode())
+        ).collect(Collectors.toList());
+    stockPositionList.addAll(_stockPositionList);
+end

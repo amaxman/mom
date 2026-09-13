@@ -1,0 +1,37 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+
+global String subject;
+global String content;
+global List emailAttachmentList;
+global EmailConfig emailConfig;
+global List imageFileList;
+
+rule "order_detail_manu_out_stat_CSL"
+    when
+    then
+    if (emailConfig==null) return;
+
+    EmailAddress senderEmailAddress=new EmailAddress("meshv@yarnscolors.com","成纱率统计");
+    List<EmailAddress> emailAddressList=Arrays.asList(
+        new EmailAddress("Taoyj@yarnscolors.com","HV_NBD_陶亚军")
+    );
+
+    EmailUtils.sendWithImageAtt(
+        emailConfig,
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        content,
+        emailAttachmentList,
+        null
+    );
+
+end

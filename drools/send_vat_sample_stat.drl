@@ -1,0 +1,115 @@
+package mom.service.drl;
+dialect  "java";
+
+
+import java.util.List;
+import java.util.Date;
+import java.util.stream.Collectors;
+
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+import com.jeesite.common.msg.EmailConfig;
+import com.jeesite.common.lang.DateUtils;
+import mom.entity.basic.develop.DevApp
+import java.util.ArrayList
+import mom.entity.factory.repStat.ClientVatBigPercent;
+
+
+global String subject;
+global EmailConfig emailConfig;
+global List emailAttachmentList;
+global List imageList;
+global List clientVatBigPercentList;
+
+
+rule "send_vat_sample_stat"
+    when
+    then
+
+
+    String html="<html>";
+
+    html+="<style>";
+    html+=".headTitle{font-size:18px}"
+        +".foot_internal{font-size:16px;color:red}"
+        +".foot_not_replay{font-size:12px;color:#AEAFAD}"
+        +".tr_head {height: 40px;}"
+        +" tr {height: 30px; }"
+        +" .td_item_title{font-size:14px;background:gray;border:0;color:white;align-items:center;align-content:center;align-self:center;alignment-baseline:center}"
+        +" .td_item_data{font-size:12px;border:0}"
+        +" .td_item_key{width:200px}"
+        +" .td_item_value{width:80px}"
+        +" .center{flex-direction:column;text-align:center}"
+        +" .left{flex-direction:column;text-align:left}"
+        +".colored-row td:first-child {border-top-left-radius: 10px;border-right: 1px solid #CCC;}"
+        +".colored-row td:last-child{border-top-right-radius: 10px;}"
+        +".data-row td:first-child{border-top-left-radius: 0px;border-left: 1px solid #CCC;}"
+        +".data-row td:last-child{border-top-right-radius: 0px;border-right: 1px solid #CCC;}"
+        +".data-row td{border-bottom: 1px solid #CCC;}"
+        ;
+    html+="</style>";
+
+    html+="<body>";
+
+    html+="<table style='border-spacing: 0px;' class='colored-row'>";
+
+    html+="<tr>";
+    html+="<td colspan='7' class='center' style='border-right: 0px !important;;'><span class='headTitle'>"+subject+"</span></td>";
+    html+="</tr>";
+
+    html+="<tr class='tr_head'>";
+    html+="<td class='td_item_title td_item_key center'>客户</td>";
+    html+="<td class='td_item_title td_item_value center'>首单日期</td>";
+    html+="<td class='td_item_title td_item_value center'>样缸订单数</td>";
+    html+="<td class='td_item_title td_item_value center'>小缸订单数</td>";
+    html+="<td class='td_item_title td_item_value center'>大缸订单数</td>";
+    html+="<td class='td_item_title td_item_value center'>订单总数</td>";
+    html+="<td class='td_item_title td_item_value center'>样缸占比</td>";
+    html+="</tr>";
+
+    for (Object obj:clientVatBigPercentList) {
+        if (obj instanceof ClientVatBigPercent) {
+            ClientVatBigPercent clientVatBigPercent=(ClientVatBigPercent)obj;
+            html+="<tr class='data-row'>";
+            html+="<td class='td_item_data center'>"+clientVatBigPercent.getCompName()+"</td>";
+            html+=String.format("<td class='td_item_data center'>%s</td>",clientVatBigPercent.getFirstOrderDate()==null?"":DateUtils.formatDate(clientVatBigPercent.getFirstOrderDate(),"yyyy-MM-dd"));
+            html+=String.format("<td class='td_item_data center'>%s</td>",clientVatBigPercent.getVatSampleTotal());
+            html+=String.format("<td class='td_item_data center'>%s</td>",clientVatBigPercent.getVatNormalTotal());
+            html+=String.format("<td class='td_item_data center'>%s</td>",clientVatBigPercent.getVatBigTotal());
+            html+=String.format("<td class='td_item_data center'>%s</td>",clientVatBigPercent.getVatTotal());
+            html+=String.format("<td class='td_item_data center'>%.1f</td>",clientVatBigPercent.getVatTotalPercent());
+            html+="</tr>";
+        }
+    }
+
+    html+="</table>";
+
+    html+="<p><span class='foot_internal'>内部数据，请注意保密</span></p>";
+        html+="<p><span class='foot_not_replay'>系统邮件，请勿直接回复</span></p>";
+
+    html+="</body>";
+
+    html+="</html>";
+
+    EmailAddress senderEmailAddress=new EmailAddress("","");
+
+
+    List<EmailAddress> emailAddressList=
+        Arrays.asList(
+            new EmailAddress("","")
+        );
+
+    EmailUtils.sendWithImageAtt(
+        emailConfig,
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        html,
+        emailAttachmentList,
+        imageList
+    );
+
+
+end

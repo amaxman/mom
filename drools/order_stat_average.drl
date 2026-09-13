@@ -1,0 +1,40 @@
+package mom.service.drl;
+dialect  "java";
+
+import java.util.List;
+import java.util.Arrays;
+import com.jeesite.common.msg.EmailAddress;
+import org.apache.commons.mail.EmailAttachment;
+import com.jeesite.common.msg.EmailUtils;
+
+global String subject;
+global String content;
+global List emailAttachmentList;
+
+rule "order_stat_average"
+    when
+    then
+    String userId="amaxman",userPassword="",smtpAddress="mail.163.com",slSmtpPort="465";
+    String smtpPort="25";
+    Boolean sslOnConnect=false;
+    EmailAddress senderEmailAddress=new EmailAddress("amaxman@163.com","系统邮件");
+    List<EmailAddress> emailAddressList=Arrays.asList(
+        new EmailAddress("amaxman@163.com","离子魔方")
+    );
+
+    System.out.println("===================="+String.valueOf(emailAttachmentList.size())+"======================");
+
+    EmailUtils.sendWithAttach(
+        userId,
+        userPassword,
+        smtpAddress,
+        smtpPort,
+        sslOnConnect,
+        slSmtpPort,
+        senderEmailAddress,
+        emailAddressList,
+        subject,
+        content,
+        emailAttachmentList
+    );
+end
