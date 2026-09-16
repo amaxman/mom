@@ -1,0 +1,37 @@
+package mom.service.drl;
+dialect  "java"
+
+import mom.entity.factory.stock.FactStockOutProd
+import com.jeesite.common.lang.StringUtils
+import mom.service.factory.client.ClientService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.client.Client
+import mom.service.basic.config.DataValueService
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+
+global FactStockOutProd factStockOutProd;
+
+//获取销货单（色纱出库单）单号
+rule "PMC_StockOut_Prod_OrderNo"
+    when
+    then
+    if (factStockOutProd==null) return;
+    String clientId=factStockOutProd.getClientId();
+    if (StringUtils.isEmpty(clientId)) throw new Exception("出库客户标识不允许为为空");
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    Client client=clientService.get(clientId);
+    if (client==null) throw new Exception("客户不存在，可能已经被删除");
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) throw new Exception("客户编号不存在");
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    factStockOutProd.setStockOutOrderNo(
+            String.format(
+                    "DX50-%s%s%s"
+                    ,clientCode
+                    ,DateUtils.formatDate(new Date(),"yyMMdd")
+                    ,String.format("%02d",dataValueService.getNextNum("stockOutProdOrderNo"))
+                    )
+    );
+end
