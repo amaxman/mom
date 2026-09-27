@@ -1,0 +1,189 @@
+package mom.service.drl;
+dialect  "java"
+
+import mom.entity.factory.order.FactoryOrder
+import mom.entity.factory.order.FactoryOrderDetail
+import com.jeesite.common.entity.Page
+import mom.entity.factory.client.Client
+import mom.service.factory.client.ClientService
+import com.jeesite.common.utils.SpringUtils
+import mom.view.factory.quartz.entity.ClientSampleVatStat
+import java.util.List
+import java.util.stream.Collectors
+import mom.entity.factory.cargo.Cargo
+import mom.service.factory.order.FactoryOrderDetailService
+import mom.service.factory.cargo.CargoService
+import com.jeesite.common.lang.DateUtils
+import com.jeesite.common.lang.StringUtils
+import java.util.ArrayList
+import java.util.Comparator
+import mom.view.factory.quartz.entity.SampleVatAppend
+import mom.view.factory.quartz.entity.EnumSampleVatCate
+
+global FactoryOrder factoryOrder
+global Page<ClientSampleVatStat> page
+
+//样缸追缸计算
+rule "client_sample_vat_computer"
+    when
+    then
+    if (factoryOrder==null) return;
+
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    if (clientService==null) return;
+
+
+    //获取满足订单项重量低于30公斤的所有客户信息，请注意设定客户信息、开始时间、结束时间
+    if (factoryOrder.getBeginTime()!=null) System.out.println(DateUtils.formatDate(factoryOrder.getBeginTime()));
+    if (factoryOrder.getEndTime()!=null) System.out.println(DateUtils.formatDate(factoryOrder.getEndTime()));
+    if (StringUtils.isNotEmpty(factoryOrder.getClientName())) System.out.println(factoryOrder.getClientName());
+    if (factoryOrder.getSampleVatLimit()!=null) {
+        System.out.println(String.format("%.2f",factoryOrder.getSampleVatLimit()));
+    } else {
+        factoryOrder.setSampleVatLimit(30d);
+    }
+    Page<Client> pageClient = clientService.findPage4SampleVat(factoryOrder);
+    page.setCount(pageClient.getCount());
+
+    List<Client> clientList=pageClient.getList();
+    List<String> clinetIdList=clientList.stream().map(p->p.getId()).collect(Collectors.toList());
+
+    FactoryOrderDetailService factoryOrderDetailService=SpringUtils.getBean(FactoryOrderDetailService.class);
+
+    //获取指定客户列表时间段内所有订单项
+    List<FactoryOrderDetail> factoryOrderDetailList=factoryOrderDetailService.getAllOrderDetailByClientIdList(
+            clinetIdList,
+            factoryOrder.getBeginTime(),
+            factoryOrder.getEndTime());
+
+    //获取产品定义
+    List<String> cargoIdList=factoryOrderDetailList.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
+
+    List<ClientSampleVatStat> clientSampleVatStatList=new ArrayList<>();
+    clientList.forEach(client -> {
+        //获取客户标识
+        String clientId=client.getId();
+        //获取该客户所有订单项
+        List<FactoryOrderDetail> factoryOrderDetailListClient=factoryOrderDetailList.stream().filter(p->clientId.equals(p.getClientId())).collect(Collectors.toList());
+        //获取该客户订单项所有产品标识列表
+        List<String> cargoIdListAll=factoryOrderDetailListClient.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+        //获取所有产品列表
+        List<Cargo> cargoListAll=cargoList.stream().filter(p->cargoIdListAll.contains(p.getId())).collect(Collectors.toList());
+
+        //初始化客户样缸追缸数据
+        ClientSampleVatStat clientSampleVatStat=new ClientSampleVatStat();
+        //客户标识
+        clientSampleVatStat.setId(clientId);
+        //客户企业名称
+        clientSampleVatStat.setCompName(client.getCompName());
+        //客户编码
+        clientSampleVatStat.setClientCode(client.getClientCode());
+        //订单项总数
+        clientSampleVatStat.setOrderTotal(factoryOrderDetailListClient.size());
+        //订单项合计重量
+        clientSampleVatStat.setOrderDetailTotal(factoryOrderDetailListClient.stream().mapToDouble(p->p.getItemTotal()).sum()/1000);
+        //产品数，不同于产品定义数
+        clientSampleVatStat.setOrderDetailCargoTotal(cargoListAll.stream().map(p->p.getCargoId()).distinct().count());
+
+        //#region 计算订单数量，非订单项
+        clientSampleVatStat.setDpTotal(factoryOrderDetailListClient.stream().map(p->p.getOrderId()).distinct().count());
+
+        //样缸
+        //获取小缸产品订单及产品编号
+        List<FactoryOrderDetail> factoryOrderDetailListSampleVat=factoryOrderDetailListClient
+                .stream().filter(p->p.getItemTotal()<=factoryOrder.getSampleVatLimit()).sorted(Comparator.comparing(FactoryOrderDetail::getOrderDate))
+                .collect(Collectors.toList());
+        List<String> cargoIdListClientSampleVatId=factoryOrderDetailListSampleVat.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+        //获取小缸产品标识与订单标识,认为首缸为样缸 factoryOrderDetailListSampleVatComputer
+        //此段为定制需求。获取第一个订单项目作为样缸订单，其他的添加到追缸数据中,不建议如此计算
+        List<FactoryOrderDetail> factoryOrderDetailListSampleVatComputer=new ArrayList<>();
+        cargoIdListClientSampleVatId.forEach(cargoId->{
+            FactoryOrderDetail factoryOrderDetailCargo=factoryOrderDetailListSampleVat.stream().filter(p->StringUtils.equalsIgnoreCase(cargoId,p.getCargoId())).findFirst().orElse(null);
+            if (factoryOrderDetailCargo!=null) factoryOrderDetailListSampleVatComputer.add(factoryOrderDetailCargo);
+        });
+        //小缸产品订单数及重量
+        clientSampleVatStat.setProofTotal(factoryOrderDetailListSampleVatComputer.size());
+        clientSampleVatStat.setProofWeight(factoryOrderDetailListSampleVatComputer.stream().mapToDouble(p->p.getItemTotal()).sum()/1000);
+        //小缸产品类别数
+        List<String> cargoIdListProof=factoryOrderDetailListSampleVatComputer.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+        clientSampleVatStat.setProofCargoTotal(cargoListAll.stream().filter(p->cargoIdListProof.contains(p.getId())).map(p->p.getCargoName()).distinct().collect(Collectors.toList()).size());
+
+        //获取已追缸订单、数量及重量
+        //已追缸计算逻辑：cargoId位于样缸列表中且重量大于30或样缸列表中不包含cargoId数据
+        List<FactoryOrderDetail> factoryOrderDetailListAppend=factoryOrderDetailListClient.stream()
+                .filter(p->(cargoIdListClientSampleVatId.contains(p.getCargoId()) && p.getItemTotal()>=factoryOrder.getSampleVatLimit()) || (!cargoIdListClientSampleVatId.contains(p.getCargoId())))
+                .collect(Collectors.toList());
+        //获取参与计算的产品标识，并将样缸计算数据中的相同产品标识添加到已经追加到已经追缸的数据中
+        List<String> cargoIdListSampleVatComputer=factoryOrderDetailListSampleVatComputer.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+        List<String> orderDetailIdListSampleVatComputer=factoryOrderDetailListSampleVatComputer.stream().map(p->p.getId()).collect(Collectors.toList());
+        List<FactoryOrderDetail> _list=factoryOrderDetailListSampleVat.stream()
+                .filter(p->
+                        cargoIdListSampleVatComputer.contains(p.getCargoId())
+                                && !orderDetailIdListSampleVatComputer.contains(p.getId())
+                )
+                .collect(Collectors.toList());
+
+        factoryOrderDetailListAppend.addAll(_list);
+        int appendTotal=factoryOrderDetailListAppend.size();
+        double appendWeight=factoryOrderDetailListAppend.stream().mapToDouble(p->p.getItemTotal()).sum();
+        clientSampleVatStat.setAppendTotal(appendTotal);
+        clientSampleVatStat.setAppendWeight(appendWeight/1000);
+
+        //已追缸产品类别数
+        List<String> cargoIdListAppend=factoryOrderDetailListAppend.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+        clientSampleVatStat.setAppendCargoTotal(cargoListAll.stream().filter(p->cargoIdListAppend.contains(p.getId())).map(p->p.getCargoName()).distinct().collect(Collectors.toList()).size());
+
+        //#获取未追缸数量及重量
+        //计算逻辑：cargoId位于样缸列表中且未出现在已经追缸的数据中
+        List<FactoryOrderDetail> factoryOrderDetailListUnAppend=factoryOrderDetailListSampleVat.stream()
+                .filter(p->!cargoIdListAppend.contains(p.getCargoId()))
+                .collect(Collectors.toList());
+        clientSampleVatStat.setUnAppendTotal(factoryOrderDetailListUnAppend.size());
+        clientSampleVatStat.setUnAppendWeight(factoryOrderDetailListUnAppend.stream().mapToDouble(p->p.getItemTotal()).sum()/1000);
+
+        //未追缸产品类别数
+        List<String> cargoIdListUnAppend=factoryOrderDetailListUnAppend.stream().map(p->p.getCargoId()).distinct().collect(Collectors.toList());
+        clientSampleVatStat.setUnAppendCargoTotal(cargoListAll.stream().filter(p->cargoIdListUnAppend.contains(p.getId())).map(p->p.getCargoName()).distinct().collect(Collectors.toList()).size());
+
+        boolean computerDetail=false;
+        //#计算明细
+        if (computerDetail) {
+            List<SampleVatAppend> sampleVatAppendListSample=factoryOrderDetailListSampleVatComputer.stream().map(p->SampleVatAppend.convertByOrderDetail(p, EnumSampleVatCate.sample)).collect(Collectors.toList());
+            List<String> idList=sampleVatAppendListSample.stream().map(p->p.getId()).collect(Collectors.toList());
+            List<SampleVatAppend> sampleVatAppendListAppend=factoryOrderDetailListAppend.stream()
+                    .filter(p->!idList.contains(p.getId()))
+                    .map(p->SampleVatAppend.convertByOrderDetail(p, EnumSampleVatCate.append)).collect(Collectors.toList());
+            idList.addAll(sampleVatAppendListAppend.stream().map(p->p.getId()).collect(Collectors.toList()));
+            List<SampleVatAppend> sampleVatAppendListUnAppend=factoryOrderDetailListUnAppend.stream()
+                    .filter(p->!idList.contains(p.getId()))
+                    .map(p->SampleVatAppend.convertByOrderDetail(p, EnumSampleVatCate.unAppend)).collect(Collectors.toList());
+            List<SampleVatAppend> sampleVatAppendList=new ArrayList<>();
+            sampleVatAppendList.addAll(sampleVatAppendListSample);
+            sampleVatAppendList.addAll(sampleVatAppendListAppend);
+            sampleVatAppendList.addAll(sampleVatAppendListUnAppend);
+            clientSampleVatStat.setSampleVatAppendList(sampleVatAppendList);
+        }
+
+        //获取样缸占比
+        if (computerDetail) {
+            int orderDetailCount=factoryOrderDetailListClient.size();
+            int proofOrderDetailCount=factoryOrderDetailListClient.stream().filter(p->p.getItemTotal()<=factoryOrder.getSampleVatLimit()).collect(Collectors.toList()).size();
+            if (proofOrderDetailCount>0) {
+                clientSampleVatStat.setProofPercent(proofOrderDetailCount*100d/orderDetailCount);
+            }
+        }
+
+        //获取订单均值
+        if (computerDetail) {
+            int orderDetailCount=factoryOrderDetailListClient.size();
+            if (orderDetailCount>0) {
+                clientSampleVatStat.setOrderCargoAvg(factoryOrderDetailListClient.stream().mapToDouble(p->p.getItemTotal()).sum()/orderDetailCount);
+            }
+        }
+        clientSampleVatStatList.add(clientSampleVatStat);
+
+    });
+    page.setList(clientSampleVatStatList);
+end
