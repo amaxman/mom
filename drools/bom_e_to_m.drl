@@ -1,0 +1,99 @@
+package mom.service.drl;
+import com.jeesite.common.lang.StringUtils
+import mom.entity.factory.proofing.FactProofDetail
+import mom.service.factory.proofing.FactProofDetailService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.proofing.FactProofCargo
+import mom.service.factory.proofing.FactProofCargoService
+import mom.entity.factory.proofing.FactProofing
+import mom.service.factory.proofing.FactProofingService
+import mom.entity.factory.proofing.FactProofMaterial
+import java.util.List
+import mom.service.factory.proofing.FactProofMaterialService
+import mom.entity.factory.lab.FactBom
+import java.util.Date
+import mom.entity.factory.lab.FactBomDetail
+import java.util.ArrayList
+import mom.service.factory.lab.FactBomService
+import mom.service.factory.lab.FactBomDetailService
+dialect  "java"
+
+global String proofDetailId;
+
+//BOM:由研发BOM（EBOM）转换为生产BOM(MBOM)
+rule "bom_e_to_m"
+    when
+    then
+    if (StringUtils.isEmpty(proofDetailId)) throw new Exception("打烊明细标识不允许为空");
+
+    FactProofDetailService factProofDetailService=SpringUtils.getBean(FactProofDetailService.class);
+    FactProofDetail factProofDetail=factProofDetailService.get(proofDetailId);
+    if (factProofDetail==null) throw new Exception("打烊明细标识不允许为空");
+
+    //打烊产品
+    String proofCargoId=factProofDetail.getProofCargoId();
+    if (StringUtils.isEmpty(proofCargoId)) throw new Exception("未能获取打烊产品标识");
+    FactProofCargoService factProofCargoService=SpringUtils.getBean(FactProofCargoService.class);
+    FactProofCargo factProofCargo=factProofCargoService.get(proofCargoId);
+    if (factProofCargo==null) throw new Exception("打烊产品不存在，可能已经饿被删除");
+
+    //打烊
+    String proofingId=factProofCargo.getProofingId();
+    if (StringUtils.isEmpty(proofingId)) throw new Exception("未能获取打样标识");
+    FactProofingService factProofingService=SpringUtils.getBean(FactProofingService.class);
+    FactProofing factProofing=factProofingService.get(proofingId);
+    if (factProofing==null) throw new Exception("打样申请不存在，可能已经被删除");
+
+    //打烊物料
+    FactProofMaterialService factProofMaterialService=SpringUtils.getBean(FactProofMaterialService.class);
+    List<FactProofMaterial> factProofMaterialList=factProofMaterialService.getByProofDetailId(proofDetailId);
+    if (factProofMaterialList==null || factProofMaterialList.isEmpty()) throw new Exception("打样物料不存在，无法转换为研发BOM");
+
+    //E-BOM主表
+    FactBomService factBomService=SpringUtils.getBean(FactBomService.class);
+    FactBom factBom=factBomService.getLastByOrderDetailId(factProofCargo.getOrderDetailId());
+    if (factBom!=null) throw new Exception("BOM已经存在");
+    factBom=new FactBom();
+    factBom.setOrderId(factProofing.getOrderId());
+    factBom.setOrderDetailId(factProofCargo.getOrderDetailId());
+    factBom.setProofId(proofingId);
+    factBom.setProofCargoId(proofCargoId);
+    factBom.setCargoId(factProofCargo.getCargoDefineId());
+    factBom.setCargoWeight(factProofCargo.getCargoWeight());
+    factBom.setCargoLiquorRatio(factProofCargo.getCargoLiquorRatio());
+    factBom.setIsFormula("1");
+    factBom.setProvideDate(new Date());
+    factBom.setValidityDate(factProofing.getProofingDate());
+    factBom.setTransferTimes(0);
+
+    //E-BOM明细
+    List<FactBomDetail> factBomDetailList=new ArrayList<>();
+    factProofMaterialList.forEach(item->{
+        FactBomDetail factBomDetail=new FactBomDetail();
+        factBomDetail.setOrderNum(item.getOrderNum());
+        factBomDetail.setProcessLibId(item.getProcessLibId());
+        factBomDetail.setProcessId(item.getProcessId());
+        factBomDetail.setProcedureId(item.getProcedureId());
+
+        factBomDetail.setProofMaterialId(factProofCargo.getCargoDefineId());
+        factBomDetail.setBomObjectId(item.getMaterialId());
+        factBomDetail.setBomCate("cargo");
+        factBomDetail.setBomTotal(item.getMaterialTotal());
+        factBomDetail.setBomUnit(item.getMaterialUnit());
+        factBomDetail.setValidityDate(new Date());
+
+        factBomDetailList.add(factBomDetail);
+    });
+
+    //#region 保存BOM
+
+    factBomService.save(factBom);
+    String bomId=factBom.getId();
+    factBomDetailList.forEach(item->{
+        item.setBomId(bomId);
+    });
+    FactBomDetailService factBomDetailService=SpringUtils.getBean(FactBomDetailService.class);
+    factBomDetailService.insertBatch(factBomDetailList);
+    //#endregion
+
+end
