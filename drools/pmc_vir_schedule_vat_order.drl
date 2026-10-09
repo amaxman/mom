@@ -1,0 +1,266 @@
+package mom.service.drl;
+
+import com.alibaba.fastjson.JSONObject
+import com.jeesite.common.lang.StringUtils
+import mom.entity.factory.order.FactoryOrder
+import mom.service.factory.order.FactoryOrderService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.order.FactoryOrderDetail
+import java.util.List
+import mom.service.factory.order.FactoryOrderDetailService
+import mom.entity.factory.cargo.Cargo
+import mom.service.factory.cargo.CargoService
+import mom.entity.factory.cargo.CargoDefine
+import mom.service.factory.cargo.CargoDefineService
+import java.util.Arrays
+import mom.entity.factory.cargo.CargoDefManuHistory
+import mom.service.factory.cargo.CargoDefManuHistoryService
+import java.util.stream.Collectors
+import java.util.Comparator
+import mom.entity.factory.dev.Device
+import mom.service.factory.dev.DeviceService
+import com.jeesite.common.lang.DateUtils
+import mom.entity.factory.KeyValue
+import java.util.ArrayList
+import mom.entity.factory.dev.DevPara
+import mom.service.factory.dev.DevParaService
+import mom.entity.factory.dev.DevCatePara
+import mom.service.factory.dev.DevCateParaService
+import mom.view.factory.ai.AICenterController
+import mom.entity.factory.dev.DevCate
+import mom.service.factory.dev.DevCateService
+
+dialect  "java"
+
+global String orderNo;
+global Integer orderDetailNum;
+
+global JSONObject jsonResult;
+
+//根据订单号与订单项序号进行虚拟排缸
+//次方案与实际虚拟排缸方案不相同，本方案利用设备各项参数进行虚拟排缸
+rule "pmc_vir_schedule_vat_order"
+    when
+    then
+
+    if (jsonResult==null) {
+        throw new Exception("未初始化jsonResult");
+    }
+
+    //#region 检查参数
+    if (StringUtils.isEmpty(orderNo)) throw new Exception("订单号不允许为空");
+    if (orderDetailNum==null || orderDetailNum<=0) throw new Exception("订单项序号不允许为空");
+    //#endregion
+
+    //#region 订单与产品信息
+    //#region 获取订单信息
+    FactoryOrderService factoryOrderService=SpringUtils.getBean(FactoryOrderService.class);
+    FactoryOrder factoryOrder=factoryOrderService.getByOrderNo(orderNo);
+    if (factoryOrder==null) throw new Exception("订单不存在");
+
+    FactoryOrderDetailService factoryOrderDetailService=SpringUtils.getBean(FactoryOrderDetailService.class);
+    List<FactoryOrderDetail> factoryOrderDetailList=factoryOrderDetailService.getAllByOrderId(factoryOrder.getId());
+    if (factoryOrderDetailList==null || factoryOrderDetailList.isEmpty()) throw new Exception("该订单下未包含任何订单项");
+    FactoryOrderDetail factoryOrderDetail=factoryOrderDetailList.stream()
+            .filter(p->p.getOrderNo()!=null && p.getOrderNo().intValue()==orderDetailNum.intValue())
+            .findFirst().orElse(null);
+    if (factoryOrderDetail==null) throw new Exception("未能通过订单项序号获取订单项数据");
+    Double itemTotal=factoryOrderDetail.getItemTotal();
+    if (itemTotal==null || itemTotal<=0) throw new Exception("订单项重量不允许为空且必须大于0");
+    //#endregion
+
+    //#region 染色重量取整数
+    int dyeWeight=itemTotal.intValue();
+    //#endregion
+
+    //#region 获取产品信息
+    String cargoId=factoryOrderDetail.getCargoId();
+    if (StringUtils.isEmpty(cargoId)) throw new Exception("该订单项未指定产品标识");
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    Cargo cargo=cargoService.get(cargoId);
+    if (cargo==null) throw new Exception("产品信息不存在");
+    String cargoDefId=cargo.getCargoDefId();
+    if (StringUtils.isEmpty(cargoDefId)) throw new Exception("产品中未指定产品类别");
+    CargoDefineService cargoDefineService=SpringUtils.getBean(CargoDefineService.class);
+    CargoDefine cargoDefine=cargoDefineService.get(cargoDefId);
+    if (cargoDefine==null) throw new Exception("未能获取产品类别数据");
+    String cargoDefineCargoCode=cargoDefine.getCargoCode();
+    if (StringUtils.isEmpty(cargoDefineCargoCode)) throw new Exception("未指定产品类别编码信息");
+    //#endregion
+
+    //#region 根据品号获取适用设备参数
+    String devParaGroupCode="yarn_general"; //目前暂无判定方法，暂采用常规纱线进行判定 todo:需要算法进行判定
+    List<String> devCateGroupCodeList=Arrays.asList(devParaGroupCode);
+    //#endregion
+    //#endregion
+
+    //#region 根据物料类别cargoDefId获取历史染缸,并获取最近一单设备编号
+    CargoDefManuHistoryService cargoDefManuHistoryService=SpringUtils.getBean(CargoDefManuHistoryService.class);
+    List<CargoDefManuHistory> cargoDefManuHistoryList=cargoDefManuHistoryService.findListByCargoDefIdList3Years(cargoDefId);
+    List<String> machineCodeHistoryList=cargoDefManuHistoryList.stream()
+            .filter(p->StringUtils.isNotEmpty(p.getMachineCateCode())).map(p->p.getMachineCode())
+            .distinct().collect(Collectors.toList());
+    CargoDefManuHistory cargoDefManuHistoryLast=cargoDefManuHistoryList.stream()
+            .sorted(Comparator.comparing(CargoDefManuHistory::getManuPlanDate).reversed())
+            .findFirst().orElse(null);
+    String devCodeLast=cargoDefManuHistoryLast==null?"":cargoDefManuHistoryLast.getMachineCode();
+    //#endregion
+
+    //#region 数据准备,按设备组建各类数据devParaListJson
+    //#region 获取所有可用设备 List<Device> deviceList
+    DeviceService deviceService=SpringUtils.getBean(DeviceService.class);
+    List<Device> deviceList=deviceService.getAllNormalByFactId();
+    if (deviceList==null || deviceList.isEmpty()) throw new Exception("未发现可用设备，请确保所有设备处于启用状态");
+    //#endregion
+
+    //#region 获取所有设备组参数 List<DevPara> devParaList
+    List<String> devIdList=deviceList.stream().map(p->p.getId()).collect(Collectors.toList());
+    DevParaService devParaService=SpringUtils.getBean(DevParaService.class);
+    List<DevPara> devParaList=devParaService.getAllByDevIdList(devIdList,devCateGroupCodeList);
+    if (devParaList==null || devParaList.isEmpty()) throw new Exception("未发现适应该品号的设备参数配置");
+    devParaList=devParaList.stream().filter(p->StringUtils.isNotEmpty(p.getParaValue())).collect(Collectors.toList());
+    if (devParaList.isEmpty()) throw new Exception("请配置该品号适用的参数");
+    //#endregion
+
+    //#region 获取设备所有参数设定标识列表 List<DevCatePara> devCateParaList
+    List<String> devParaIdList=devParaList.stream().map(p->p.getDevParaId()).distinct().collect(Collectors.toList());
+    DevCateParaService devCateParaService=SpringUtils.getBean(DevCateParaService.class);
+    List<DevCatePara> devCateParaList=devCateParaService.getAllByIdList(devParaIdList);
+    //#endregion
+
+    //#region 将所有参数以设备ID标识为基础转换为一行数据
+    AICenterController aiCenterController=SpringUtils.getBean(AICenterController.class);
+    List<JSONObject> devParaListJson=aiCenterController.getJsonList(devParaList,deviceList,devParaGroupCode,itemTotal);
+    if (devParaListJson.isEmpty()) throw new Exception("虚拟排缸失败");
+    //#endregion
+
+    //#region 计算最小染色量(dye_weight_min)、最大染色量(dye_weight_max)与最佳染色量范围(loading_prefect_min,loading_prefect_max)
+    devParaListJson.forEach(item->{
+        if (!item.containsKey("dyeWeightArea")) return;
+
+        //#region 最大染色量与最小染色量，遍历每个染色范围，获取最大值与最小值，提取至对象
+        aiCenterController.computerDyeWeightArea(item);
+        //#endregion
+
+        //#region 最佳染色量
+        aiCenterController.computerPrefectWaterArea(item);
+        //#endregion
+    });
+    //#endregion
+    //#endregion
+
+    //#region 获取设备分类信息devCateList
+    List<String> devCateIdList=deviceList.stream().filter(p->StringUtils.isNotEmpty(p.getDevCateId())).map(p->p.getDevCateId()).distinct().collect(Collectors.toList());
+    DevCateService devCateService=SpringUtils.getBean(DevCateService.class);
+    List<DevCate> _devCateList=devCateService.getAll();
+    List<DevCate> devCateList=_devCateList.stream().filter(p->devCateIdList.contains(p.getId())).collect(Collectors.toList());
+    //#endregion
+
+    //#region 填充基础的设备信息、设备分类信息等
+    devParaListJson.forEach(item->{
+        //#region 获取设备类别标识
+        if (!item.containsKey("devCateId")) return;
+        String devCateId=item.getString("devCateId");
+        if (StringUtils.isEmpty(devCateId)) return;
+        aiCenterController.computerDevCateInfo(item,devCateList);
+        //#endregion
+    });
+    //#endregion
+
+    //#region 重量最合适
+    devParaListJson.stream()
+            .filter(p->p.containsKey("loading_prefect_min") && p.containsKey("loading_prefect_max")
+                    && p.getIntValue("loading_prefect_min")<=dyeWeight && p.getIntValue("loading_prefect_max")>=dyeWeight
+            ).forEach(item->{
+                item.put("loading_prefect",true);
+            });
+    //#endregion
+
+    //#region 曾经染过
+    devParaListJson.stream().filter(p->p.containsKey("devCode") && machineCodeHistoryList.contains(p.getString("devCode"))).forEach(item->{
+        String devCode=item.getString("devCode");
+        CargoDefManuHistory cargoDefManuHistoryItem=cargoDefManuHistoryList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getMachineCode(),devCode)).findFirst().orElse(null);
+        if(cargoDefManuHistoryItem!=null) {
+            item.put("manuPlanCode",cargoDefManuHistoryItem.getManuPlanCode());
+            item.put("cargoId",cargoDefManuHistoryItem.getCargoCargoId());
+            item.put("manuPlanDetailTotal",String.format("%.2f%s",cargoDefManuHistoryItem.getManuPlanDetailTotal(),cargo.getCargoMeteringUnit()));
+
+        } else {
+            item.put("manuPlanCode","");
+            item.put("cargoId","");
+            item.put("manuPlanDetailTotal","");
+        }
+        if (StringUtils.equalsIgnoreCase(devCodeLast,devCode)) {
+            item.put("manuPlan_last",true);
+        } else {
+            item.put("manuPlan_last",false);
+        }
+    });
+    //#endregion
+
+    //#region 按照最大染色重量逆向排序
+    devParaListJson=devParaListJson.stream().sorted((obj0,obj1)->{
+        if (obj0==null || obj1==null || !obj0.containsKey("dye_weight_max") || !obj1.containsKey("dye_weight_max")) {
+            return 0;
+        }
+        Double dye_weight_max0=obj0.getDouble("dye_weight_max"),dye_weight_max1=obj1.getDouble("dye_weight_max");
+        Double dye_weight_max=dye_weight_max1-dye_weight_max0;
+        return dye_weight_max.intValue();
+    }).collect(Collectors.toList());
+    //#endregion
+
+    //#region 缓存数据
+
+    //#region 计算基础数据
+    jsonResult.put("dyeWeight",itemTotal);
+    jsonResult.put("orderDate",DateUtils.formatDate(factoryOrder.getOrderDate()));
+    jsonResult.put("cargoId",cargo.getCargoId());
+    jsonResult.put("cargoDefCode",cargoDefine.getCargoCode());
+    jsonResult.put("agreeDeliveryDate",DateUtils.formatDate(factoryOrderDetail.getAgreeDeliveryDate()));
+    //#endregion
+
+    //#region 完美数据
+    List<JSONObject> jsonPrefectList=devParaListJson.stream().filter(p->p.containsKey("loading_prefect") && p.getBooleanValue("loading_prefect")).collect(Collectors.toList());
+    jsonPrefectList.forEach(item->{
+        item.put("dyeReal",dyeWeight+cargo.getCargoMeteringUnit());
+    });
+    jsonResult.put("prefect",jsonPrefectList);
+    devParaListJson.removeAll(jsonPrefectList);
+    //#endregion
+
+    //#region 曾使用过却非一次性完美染色完成数据
+    List<JSONObject> jsonHistoryList=devParaListJson.stream().filter(p->p.containsKey("devCode") && machineCodeHistoryList.contains(p.getString("devCode"))).collect(Collectors.toList());
+    jsonResult.put("history",jsonHistoryList);
+    //#endregion
+
+
+    //#endregion
+
+    //#region 默认KeyValue List
+    List<KeyValue<String,String>> defaultKeyValueList=new ArrayList<>();
+//        defaultKeyValueList.add(new KeyValue<>("devCateGroupCode","参数组编码"));
+    defaultKeyValueList.add(new KeyValue<>("dye_weight_min","最小染色量"));
+    defaultKeyValueList.add(new KeyValue<>("dye_weight_max","最大染色量"));
+    defaultKeyValueList.add(new KeyValue<>("loading_prefect_min","最佳装缸量最小值"));
+    defaultKeyValueList.add(new KeyValue<>("loading_prefect_max","最佳装缸量最大值"));
+    defaultKeyValueList.add(new KeyValue<>("manuPlan_last","最近工单"));
+
+    devCateParaList.forEach(item->{
+        defaultKeyValueList.add(new KeyValue<>(item.getParaCode(),item.getParaName()));
+    });
+
+    jsonResult.put("dictData",defaultKeyValueList);
+    //#endregion
+
+    //#region 拆缸并根据拆缸结果返回消息
+    try {
+        List<JSONObject> jsonGroupList=aiCenterController.splitVat(itemTotal,devParaListJson,cargo.getCargoMeteringUnit()); //当不能满足一次性染色完成时，需要进行拆缸.itemTotal必须为非整数，否则拆缸最后一缸会出现取整的情况
+        jsonResult.put("group",jsonGroupList);
+        jsonResult.put("message","虚拟排缸成功");
+    } catch (Exception ex) {
+        jsonResult.put("matchVatSplit",false);
+        jsonResult.put("matchVatSplit",true);
+        jsonResult.put("message","虚拟排缸成功,未能满足自动拆缸");
+    }
+    //#endregion
+end
