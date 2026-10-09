@@ -1,0 +1,85 @@
+package mom.service.drl;
+import com.jeesite.modules.sys.entity.DictData
+import java.util.List
+import com.jeesite.modules.sys.utils.DictUtils
+import com.jeesite.common.utils.SpringUtils
+import mom.view.basic.quartz.DutyTimeFrameQuart
+import java.util.Arrays
+import java.util.Date
+import com.jeesite.common.lang.DateUtils
+import mom.entity.basic.config.DutyTimeFrame
+import mom.service.basic.config.DutyTimeFrameService
+import java.util.ArrayList
+import com.jeesite.common.lang.StringUtils
+import java.util.stream.Collectors
+dialect  "java"
+
+global Integer startDay;
+global Integer endDay;
+
+//当班时间自动设定
+rule "pmc_dutyTime_frame"
+    when
+    then
+
+    //#region 检查参数
+    if (startDay==null || endDay==null) throw new Exception("开始天数与结束天数不允许为空");
+    if (startDay<0 || endDay<0) throw new Exception("开始天数与结束天数均不允许小于0");
+    //#endregion
+
+    //#region 获取数据字典配置
+    List<DictData> dictDataList=DictUtils.getDictList("duty_time_frame");
+    if (dictDataList==null || dictDataList.isEmpty()) throw new Exception("数据字典duty_time_frame未配置");
+    //#endregion
+
+    //#region 获取到岗周序号列表
+    String dutyDay=DictUtils.getDictValue("duty_time_frame","duty_day","")
+            ,dutyOn=DictUtils.getDictValue("duty_time_frame","duty_on","")
+            ,dutyRest=DictUtils.getDictValue("duty_time_frame","duty_rest","")
+            ;
+
+    DutyTimeFrameQuart dutyTimeFrameQuart=SpringUtils.getBean(DutyTimeFrameQuart.class);
+    List<Integer> dayOfWeekNumList=dutyTimeFrameQuart.getDutyDayOfWeekList(dutyDay);
+    if (dayOfWeekNumList.isEmpty()) dayOfWeekNumList.addAll(Arrays.asList(0,1,2,3,4,5,6));
+    //#endregion
+
+    Date currentDay=new Date();
+    int indexDay=startDay;
+    Date startDate= DateUtils.getOfDayFirst(DateUtils.addDays(currentDay,startDay)),endDate=DateUtils.getOfDayLast(DateUtils.addDays(currentDay,endDay));
+
+    DutyTimeFrameService dutyTimeFrameService=SpringUtils.getBean(DutyTimeFrameService.class);
+    List<DutyTimeFrame> dutyTimeFrameList=dutyTimeFrameService.findList(startDate,endDate);
+
+    List<DutyTimeFrame> list=new ArrayList<>();
+
+    while (endDay>=indexDay) {
+        //#region 获取索引日期
+        Date indexDate=DateUtils.getOfDayFirst(DateUtils.addDays(currentDay,indexDay++));
+        int weekIndex=DateUtils.getDayOfWeek(indexDate)-1;
+        if (!dayOfWeekNumList.contains(weekIndex)) continue;
+        //#endregion
+
+        //#region 检查既有数据
+        List<DutyTimeFrame> dutyTimeFrameListDay=dutyTimeFrameList.stream().filter(p->p.getFrameDate().getTime()==indexDate.getTime()).collect(Collectors.toList());
+        if (!dutyTimeFrameListDay.isEmpty()) continue;
+        //#endregion
+
+        if (StringUtils.isNotEmpty(dutyOn)) {
+            List<DutyTimeFrame> _dutyTimeFrameListDutyOn=dutyTimeFrameQuart.getDutyTimeFrame(indexDate,dutyOn,"duty_on");
+            if (!_dutyTimeFrameListDutyOn.isEmpty()) list.addAll(_dutyTimeFrameListDutyOn);
+        }
+
+        if (StringUtils.isNotEmpty(dutyRest)) {
+            List<DutyTimeFrame> _dutyTimeFrameListDutyRest=dutyTimeFrameQuart.getDutyTimeFrame(indexDate,dutyRest,"duty_rest");
+            if (!_dutyTimeFrameListDutyRest.isEmpty()) list.addAll(_dutyTimeFrameListDutyRest);
+        }
+    }
+
+    if (list.isEmpty()) throw new Exception("未能生成到岗时间");
+
+    list.forEach(item->{
+        item.parseTime();
+    });
+
+    dutyTimeFrameService.insertBatch(list);
+end
