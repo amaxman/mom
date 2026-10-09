@@ -1,0 +1,196 @@
+package mom.service.drl;
+dialect  "java"
+
+import java.util.Date;
+import java.util.List
+import mom.entity.factory.dev.Device
+import mom.service.factory.dev.DeviceService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.equip.Scale
+import mom.service.factory.equip.ScaleService
+import mom.entity.factory.maint.EquipPatrol
+import mom.service.factory.maint.EquipPatrolService
+import mom.service.factory.maint.EquipRepairService
+import mom.entity.factory.maint.EquipRepair
+import mom.entity.factory.pmc.Mps
+import mom.service.factory.pmc.MpsService
+import com.jeesite.common.lang.StringUtils
+import java.util.stream.Collectors
+import mom.entity.factory.cargo.Cargo
+import mom.service.factory.cargo.CargoService
+import mom.entity.factory.manufacture.FactoryManuPlanDetail
+import mom.entity.factory.config.ColorMatrix
+import mom.service.factory.config.ColorMatrixService
+import java.util.ArrayList
+import mom.service.factory.manufacture.FactoryManuPlanDetailService
+import mom.view.factory.quartz.APSQuart
+import mom.entity.basic.config.DutyTimeFrame
+import mom.entity.factory.workProc.YarnCateProcessLibrary
+import mom.entity.factory.pmc.VirScheVat
+import java.util.Comparator
+import mom.service.factory.pmc.VirScheVatService
+import mom.entity.basic.config.JobCache
+import mom.service.basic.config.JobCacheService
+import com.jeesite.common.lang.DateUtils
+import com.jeesite.common.config.Global;
+
+global Date manuDate;
+
+//虚拟排缸
+rule "pmc_mps_vir_schedule_vat"
+    when
+    then
+    if (manuDate==null) throw new Exception("排班时间不允许为空");
+
+    // 获取所有设备信息、翻版信息 deviceList,scaleList
+    DeviceService deviceService=SpringUtils.getBean(DeviceService.class);
+    List<Device> deviceList=deviceService.findList(new Device());
+    if (deviceList==null || deviceList.isEmpty()) throw new Exception("设备不允许为空");
+    ScaleService scaleService=SpringUtils.getBean(ScaleService.class);
+    List<Scale> scaleList=scaleService.findList(new Scale());
+
+    // 获取生产日期所有设备巡检记录与维修记录 equipPatrolList,equipRepairList
+    EquipPatrolService equipPatrolService=SpringUtils.getBean(EquipPatrolService.class);
+    List<EquipPatrol> equipPatrolList=equipPatrolService.findListAfterDate(manuDate);
+    EquipRepairService equipRepairService=SpringUtils.getBean(EquipRepairService.class);
+    List<EquipRepair> equipRepairList=equipRepairService.findListAfterDate(manuDate);
+
+    // 根据排产日期获取MPS，并根据优先级进行排序 mpsList
+    MpsService mpsService=SpringUtils.getBean(MpsService.class);
+    List<Mps> mpsList=mpsService.getAllMps(manuDate);
+    if (mpsList==null || mpsList.isEmpty()) throw new Exception("虚拟排缸MPS主计划不允许空");
+
+    // 根据色纱获取所有工单 cargoList,factoryManuPlanDetailList
+    List<String> cargoIdList=mpsList.stream()
+            .filter(p-> StringUtils.isNotEmpty(p.getCargoId())).map(p->p.getCargoId())
+            .distinct().collect(Collectors.toList());
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
+    FactoryManuPlanDetailService factoryManuPlanDetailService=SpringUtils.getBean(FactoryManuPlanDetailService.class);
+    List<FactoryManuPlanDetail> factoryManuPlanDetailList=cargoIdList==null || cargoIdList.isEmpty()?new ArrayList<>():factoryManuPlanDetailService.findListByCargoIdListTop1K(cargoIdList);;
+
+    // 获取所有色卡 colorMatrixList
+    ColorMatrixService colorMatrixService=SpringUtils.getBean(ColorMatrixService.class);
+    List<ColorMatrix> colorMatrixList=colorMatrixService.findList(new ColorMatrix());
+
+    //#region 获取所有设备可用时间、巡检计划 deviceList、设备翻版信息
+    APSQuart apsQuart=SpringUtils.getBean(APSQuart.class);
+    deviceList.forEach(item->{
+        String vatNo=item.getDevCode(),equipId=item.getId();
+        //#region 根据缸号获取颜色矩阵
+        if (StringUtils.isNotEmpty(vatNo)) {
+            String matrixColor=apsQuart.getColorMatrix(vatNo,factoryManuPlanDetailList,cargoList,colorMatrixList);
+            if (StringUtils.isNotEmpty(matrixColor)) item.setMatrixColor(matrixColor);
+        }
+        //#endregion
+
+        //#region 根据设备标识获取所有巡检记录
+        List<EquipPatrol> equipPatrolListEquip=equipPatrolList.stream()
+                .filter(p->StringUtils.equalsIgnoreCase(p.getEquipId(),equipId))
+                .collect(Collectors.toList());
+        List<EquipRepair> equipRepairListEquip=equipRepairList.stream()
+                .filter(p->StringUtils.equalsIgnoreCase(p.getEquipId(),equipId))
+                .collect(Collectors.toList());
+        item.setUnavailableList(equipPatrolListEquip,equipRepairListEquip);
+        //#endregion
+
+        //#region 根据设备标识最后工单时间
+        FactoryManuPlanDetail factoryManuPlanDetail=factoryManuPlanDetailList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getVatId(),equipId)).findFirst().orElse(null);
+        if (factoryManuPlanDetail!=null) {
+            if (factoryManuPlanDetail.getEndTimeReal()!=null) {
+                item.setManuTimeLast(factoryManuPlanDetail.getEndTimeReal());
+            } else {
+                item.setManuTimeLast(factoryManuPlanDetail.getEndTime());
+            }
+        }
+        //#endregion
+
+        //#region 设备翻版信息
+        List<Scale> scaleListDevice=scaleList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getEquipId(),item.getId())).collect(Collectors.toList());
+        item.setScaleList(scaleListDevice);
+        //#endregion
+    });
+    //#endregion
+
+    //#region 到岗时间安排 dutyTimeFrameList
+    List<DutyTimeFrame> dutyTimeFrameList=apsQuart.getDutyTimeFrame(manuDate);
+    if (dutyTimeFrameList==null || dutyTimeFrameList.isEmpty()) return;
+    //#endregion
+
+    //#region 坯纱类别工艺库
+    List<YarnCateProcessLibrary> yarnCateProcessLibraryList=apsQuart.getAllYarnCateProcessLibrary();
+    //#endregion
+
+    //#region 虚拟排缸
+    List<VirScheVat> virScheVatList=new ArrayList<>();
+    mpsList.forEach(mps->{
+        //todo:暂未考虑设备保养与维修不可用时间
+
+        //默认设定排缸失败
+        mps.setScheduleMethod("error");
+
+        //#region 获取变量
+        String  cargoId=mps.getCargoId()    //产品标识
+                ,yarnCateId=mps.getYarnCateId() //坯纱类别标识
+                ;
+        //#endregion
+
+        //#region 工艺库,如果没有找到适配类别的工艺库，则采用默认的。如果默认的不存在，则停止
+        YarnCateProcessLibrary yarnCateProcessLibrary=yarnCateProcessLibraryList.stream()
+                .filter(p->StringUtils.equalsIgnoreCase(p.getCargoDefCateId(),yarnCateId) || StringUtils.equalsIgnoreCase(p.getDefaultProcess(), Global.YES))
+                .sorted(Comparator.comparing(YarnCateProcessLibrary::getDefaultProcess))
+                .findFirst().orElse(null);
+        if (yarnCateProcessLibrary==null) return;
+        if (yarnCateProcessLibrary.getStandardTimeHour()==null && yarnCateProcessLibrary.getStandardTimeMin()==null) return;
+        //#endregion
+
+        //#region 获取上次工单并获取使用染缸
+        List<FactoryManuPlanDetail> factoryManuPlanDetailListLast=factoryManuPlanDetailList.stream()
+                .filter(p->StringUtils.equalsIgnoreCase(p.getCargoId(),cargoId)).collect(Collectors.toList());
+        if (!factoryManuPlanDetailListLast.isEmpty()) {
+            VirScheVat virScheduleVatVat=apsQuart.getVirScheduleVat4LastDevId(mps,factoryManuPlanDetailList,deviceList,yarnCateProcessLibrary,dutyTimeFrameList);
+            if (virScheduleVatVat!=null) {
+                mps.setScheduleMethod(virScheduleVatVat.getScheduleMethod());
+                virScheVatList.add(virScheduleVatVat);
+                return;
+            }
+        }
+        //#endregion
+
+        //#region 拆缸虚拟排缸
+        List<VirScheVat> virScheduleVatListSplit=apsQuart.getVirScheduleVat(mps,deviceList,yarnCateProcessLibrary,dutyTimeFrameList);
+        if (!virScheduleVatListSplit.isEmpty()) {
+            mps.setScheduleMethod(virScheduleVatListSplit.get(0).getScheduleMethod());
+            virScheVatList.addAll(virScheduleVatListSplit);
+        }
+        //#endregion
+    });
+    //#endregion
+
+    //#region 保存排缸数据
+    VirScheVatService virScheVatService=SpringUtils.getBean(VirScheVatService.class);
+    virScheVatService.clear();
+    if (!virScheVatList.isEmpty()) {
+        virScheVatService.insertBatch(virScheVatList);
+    }
+
+    mpsList.stream().forEach(itemMps->{
+        mpsService.save(itemMps);
+    });
+    //#endregion
+
+    //#region
+    JobCacheService jobCacheService=SpringUtils.getBean(JobCacheService.class);
+    JobCache jobCacheKey=jobCacheService.getByKey("aiQuart.autoVirScheduleDye");
+    if (jobCacheKey==null) {
+        jobCacheKey=new JobCache();
+        jobCacheKey.setJobKey("aiQuart.autoVirScheduleDye");
+        jobCacheKey.setJobName("虚拟排缸");
+
+    }
+    jobCacheKey.setJobValue(DateUtils.formatDate(new Date(),"yyyy-MM-dd HH:mm:ss"));
+    jobCacheService.save(jobCacheKey);
+
+    //#endregion
+
+end
