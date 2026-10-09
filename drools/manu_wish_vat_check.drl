@@ -1,0 +1,66 @@
+package mom.service.drl;
+
+import com.jeesite.common.lang.StringUtils
+import com.alibaba.fastjson.JSONObject
+import java.util.Arrays
+import mom.view.factory.ai.EnumColorDeep
+import mom.entity.factory.manufacture.FactoryManuPlanDetail
+import com.jeesite.common.utils.SpringUtils
+import mom.view.factory.ai.AICenterController
+import mom.service.factory.manufacture.FactoryManuPlanDetailService
+import mom.entity.factory.manufacture.FactMpBom
+import java.util.List
+import mom.service.factory.manufacture.FactMpBomService
+import java.util.stream.Collectors
+import mom.entity.factory.KeyValue
+
+dialect  "java"
+
+//前一个缸缸号
+global String vatNoPre;
+//后一个缸缸号
+global String vatNoNext;
+
+global JSONObject jsonResult;
+
+//洗缸判断
+//仅仅取缸号前两位，获取色卡标识，根据色卡标识判定是否需要洗缸
+rule "manu_wish_vat_check"
+    when
+    then
+    //#region 参数判断
+    if (StringUtils.isEmpty(vatNoPre) || StringUtils.isEmpty(vatNoNext) || vatNoPre.length()<2 || vatNoNext.length()<2) {
+        throw new Exception("所有缸号均不允许为空且长度必须不小于2");
+    }
+    if (StringUtils.equalsIgnoreCase(vatNoPre,vatNoNext)) throw new Exception("缸号不允许相同");
+    //#endregion
+
+    //#region 缸号转换为大写
+    vatNoPre=vatNoPre.toUpperCase();
+    vatNoNext=vatNoNext.toUpperCase();
+    //#endregion
+
+    //#region 缸号前两位字母
+    String _vatNoPre=vatNoPre.substring(0,2),_vatNoNext=vatNoNext.substring(0,2);
+    //#endregion
+
+    //#region 洗缸判定
+    jsonResult.put("result",0);
+
+    if (StringUtils.equalsIgnoreCase(_vatNoPre,"FL")) {
+        //#region 前一缸色号编码FL
+        if (StringUtils.equalsIgnoreCase(_vatNoNext,"EF")) {
+            jsonResult.put("message","不需要洗缸");
+        } else {
+            jsonResult.put("reason","上一缸色号为FL，下一缸为EF");
+            jsonResult.put("result",1);
+            jsonResult.put("message","必须洗缸");
+        }
+        //#endregion
+    } else {
+        jsonResult.put("reason","商业数据，保密");
+        jsonResult.put("result",1);
+        jsonResult.put("message","无法判定是否需要洗缸");
+    }
+    //#endregion
+end
