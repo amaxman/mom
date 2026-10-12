@@ -1,0 +1,167 @@
+package mom.service.drl;
+
+import mom.entity.factory.manufacture.FactMpBom;
+import mom.service.factory.manufacture.FactMpBomService
+import com.jeesite.common.lang.StringUtils
+import mom.entity.factory.lab.FactBom
+import mom.entity.factory.lab.FactBomDetail
+import java.util.List
+import mom.entity.factory.cargo.Cargo
+import java.util.stream.Collectors
+import mom.entity.factory.material.FactDyeAdjuvant
+import mom.entity.factory.proofing.FactProofing
+import mom.entity.factory.proofing.FactProofCargo
+import mom.entity.factory.manufacture.FactoryManuPlanDetail
+import mom.entity.factory.manufacture.FactoryManuPlan
+import com.jeesite.common.utils.SpringUtils
+import mom.service.factory.lab.FactBomService
+import java.util.Arrays
+import java.util.ArrayList
+import mom.service.factory.cargo.CargoService
+import mom.service.factory.lab.FactBomDetailService
+import mom.service.factory.material.FactDyeAdjuvantService
+import mom.service.factory.proofing.FactProofingService
+import mom.service.factory.proofing.FactProofCargoService
+import mom.service.factory.manufacture.FactoryManuPlanDetailService
+import mom.service.factory.manufacture.FactoryManuPlanService;
+
+dialect  "java"
+
+global String bomId;    //EBOM Id
+global String manuPlanDetailId  //工单项标识
+
+rule "proof_eBom_2_mBom"
+    when
+    then
+    if (StringUtils.isEmpty(bomId)) throw new Exception("研发BOM标识不允许为空");
+    if (StringUtils.isEmpty(manuPlanDetailId)) throw new Exception("工单项标识不允许为空");
+
+    //#region E-BOM
+    //#region 主表
+    FactBomService factBomService=SpringUtils.getBean(FactBomService.class);
+    FactBom factBom=factBomService.get(bomId);
+    if (factBom==null) throw new Exception("研发BOM不存在，可能已经被删除");
+    //#endregion
+
+    //#region 明细
+    FactBomDetailService factBomDetailService=SpringUtils.getBean(FactBomDetailService.class);
+    List<FactBomDetail> factBomDetailList=factBomDetailService.findListByBomIdList(Arrays.asList(bomId));
+    if (factBomDetailList==null || factBomDetailList.isEmpty()) throw new Exception("研发BOM染料与助剂不允许为空");
+    //#endregion
+
+    //#endregion
+
+    //#region 物料
+    List<String> cargoIdList=factBomDetailList.stream()
+            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
+            .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
+    //#endregion
+
+    //#region 燃料与助剂
+    List<String> dyeAdjuvantIdList=factBomDetailList.stream()
+            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && !StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
+            .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
+
+    FactDyeAdjuvantService factDyeAdjuvantService=SpringUtils.getBean(FactDyeAdjuvantService.class);
+    List<FactDyeAdjuvant> factDyeAdjuvantList=factDyeAdjuvantService.findListByIdList(dyeAdjuvantIdList);
+    //#endregion
+
+    //#region 打样
+    String proofingId=factBom.getProofId();
+    if (StringUtils.isEmpty(proofingId)) throw new Exception("打样申请标识不存在");
+    FactProofingService factProofingService=SpringUtils.getBean(FactProofingService.class);
+    FactProofing factProofing=factProofingService.get(proofingId);
+    if (factProofing==null) throw new Exception("未发现打样申请，可能已经被删除");
+
+    String proofCargoId=factBom.getProofCargoId();
+    if (StringUtils.isEmpty(proofCargoId)) throw new Exception("打样产品标识不存在");
+    FactProofCargoService factProofCargoService=SpringUtils.getBean(FactProofCargoService.class);
+    FactProofCargo factProofCargo=factProofCargoService.get(proofCargoId);
+    if (factProofCargo==null) throw new Exception("打样产品不存在，可能已经被删除");
+    if (factProofCargo.getCargoWeight()==null || factProofCargo.getCargoWeight()<=0) {
+        throw new Exception("打样产品中未输入合法重量，推荐10g");
+    }
+    double materialWeight=factProofCargo.getCargoWeight();
+    //#endregion
+
+    //#region 订单信息
+    String orderId=factProofCargo.getOrderId(),orderDetailId=factProofCargo.getOrderDetailId();
+    if (StringUtils.isEmpty(orderId)) throw new Exception("打样产品中未标注订单信息");
+    if (StringUtils.isEmpty(orderDetailId)) throw new Exception("打样产品中未标注订单项信息");
+    //#endregion
+
+    //#region 工单
+
+    //#region 明细表
+    FactoryManuPlanDetailService factoryManuPlanDetailService=SpringUtils.getBean(FactoryManuPlanDetailService.class);
+    FactoryManuPlanDetail factoryManuPlanDetail=factoryManuPlanDetailService.get(manuPlanDetailId);
+    if (factoryManuPlanDetail==null) throw new Exception("工单项不存在，可能已经被删除");
+    if (factoryManuPlanDetail.getManuTotal()==null || factoryManuPlanDetail.getManuTotal()<=0) throw new Exception("工单项中生产数量不合法");
+    double manuTotal=factoryManuPlanDetail.getManuTotal();
+    //#endregion
+
+    //#region 主表
+    String manuPlanId=factoryManuPlanDetail.getManuPlanId();
+    if (StringUtils.isEmpty(manuPlanId)) throw new Exception("工单项未指定工单");
+    FactoryManuPlanService factoryManuPlanService=SpringUtils.getBean(FactoryManuPlanService.class);
+    FactoryManuPlan factoryManuPlan=factoryManuPlanService.get(manuPlanId);
+    if (factoryManuPlan==null) throw new Exception("工单不存在，可能已经被删除");
+    //#endregion
+
+    //#endregion
+
+    //#region M-BOM
+    double materialRate=manuTotal*1000/materialWeight;
+    FactMpBomService factMpBomService=SpringUtils.getBean(FactMpBomService.class);
+    if (!factMpBomService.findByManuPlanDetailId(manuPlanDetailId).isEmpty()) throw new Exception("MBOM已经存在，请清空后重新导入");
+    List<FactMpBom> factMpBomList=new ArrayList<>();
+    factBomDetailList.forEach(item->{
+        if (item.getBomTotal()==null) return;
+
+        FactMpBom factMpBom=new FactMpBom();
+        factMpBom.setOrderId(orderId);
+        factMpBom.setOrderDetailId(orderDetailId);
+        factMpBom.setManuPlanId(manuPlanId);
+        factMpBom.setManuPlanDetailId(manuPlanDetailId);
+        factMpBom.setManuPlanCate(String.valueOf(factoryManuPlan.getPlanCate()));
+
+
+        //#region 物料
+        String bomObjectId=item.getBomObjectId(),bomObjectCate=item.getBomCate();
+        if (StringUtils.isEmpty(bomObjectId)) return;
+        if (StringUtils.isEmpty(bomObjectCate)) bomObjectCate="cargo";
+
+        switch (bomObjectCate) {
+            case "cargo":
+                Cargo cargo=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
+                factMpBom.setMaterialId(bomObjectId);
+                if (cargo!=null) {
+                    factMpBom.setMaterialCode(cargo.getCargoCode());
+                }
+                break;
+            default:
+                FactDyeAdjuvant factDyeAdjuvant=factDyeAdjuvantList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
+                if (factDyeAdjuvant!=null) {
+                    factMpBom.setMaterialCode(factDyeAdjuvant.getCode());
+                    factMpBom.setMaterialId(factDyeAdjuvant.getMaterialId());
+                }
+                break;
+        }
+        //#endregion
+
+        factMpBom.setQuantityOrginal(item.getBomTotal()*materialRate);
+        factMpBom.setQuantityPlan(factMpBom.getQuantityOrginal());
+        factMpBom.setQuantityIssued(0d);
+        factMpBom.setJobCode(item.getId());
+        factMpBom.setSrcCode("E-BOM");
+        factMpBom.setMaterialUnit(item.getBomUnit());
+        factMpBomList.add(factMpBom);
+    });
+    //#endregion
+
+    if (factMpBomList.isEmpty()) throw new Exception("获取生产BOM失败");
+
+    factMpBomService.insertBatch(factMpBomList);
+end

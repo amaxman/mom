@@ -51,11 +51,16 @@ rule "RD_Proof_Cargo_Convert"
     //#endregion
 
     //#region 根据品号检查产品是否存在
-    String cargoId=String.format("%s_%s_%s",cargoDefine.getCargoCode(),factProofCargo.getProofCargoCode(),factProofDetail.getProofingCode());
+    String cargoCargoId=String.format("%s_%s_%s",cargoDefine.getCargoCode(),factProofCargo.getProofCargoCode(),factProofDetail.getProofingCode());
     CargoService cargoService=SpringUtils.getBean(CargoService.class);
     if (factProofingService==null) throw new Exception("获取CargoService异常");
-    Cargo cargo=cargoService.getByCargoId(cargoId);
-    if (cargo!=null) throw new Exception("产品编号已经存在");
+    Cargo cargo=cargoService.getByCargoId(cargoCargoId);
+    FactProofDetailService factProofDetailService=SpringUtils.getBean(FactProofDetailService.class);
+    if (cargo!=null) {
+        factProofDetail.setCargoCargoId(cargoCargoId);
+        factProofDetailService.update(factProofDetail);
+        throw new Exception("产品编号已经存在");
+    }
     //#endregion
 
     //#region 产品
@@ -66,7 +71,7 @@ rule "RD_Proof_Cargo_Convert"
     cargo.setIsNewRecord(true);
     cargo.setCateId(cargoDefine.getCateId());
     cargo.setCargoDefId(cargoDefineId);
-    cargo.setCargoId(cargoId);
+    cargo.setCargoId(cargoCargoId);
     cargo.setCargoCode(cargoDefine.getCargoCode());
     cargo.setCargoName(cargoDefine.getCargoName());
     cargo.setCargoStyle(cargoDefine.getCargoStyle());
@@ -113,5 +118,9 @@ rule "RD_Proof_Cargo_Convert"
     cargo.setLastManuPlanId("");
     cargo.setLastManuPlanDetailId("");
     cargoService.save(cargo);
+
+    factProofDetail.setCargoCargoId(cargoCargoId);
+
+    factProofDetailService.update(factProofDetail);
     //#endregion
 end
