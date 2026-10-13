@@ -113,7 +113,7 @@ rule "proof_eBom_2_mBom"
     //#endregion
 
     //#region M-BOM
-    double materialRate=manuTotal*1000/materialWeight;
+    double materialRate=manuTotal/materialWeight;      //需要注意，本处生产数量单位为KG，打样重量为g，materialRate 应该为 manuTotal*1000/materialWeight*1000
     FactMpBomService factMpBomService=SpringUtils.getBean(FactMpBomService.class);
     if (!factMpBomService.findByManuPlanDetailId(manuPlanDetailId).isEmpty()) throw new Exception("MBOM已经存在，请清空后重新导入");
     List<FactMpBom> factMpBomList=new ArrayList<>();
@@ -154,7 +154,7 @@ rule "proof_eBom_2_mBom"
         factMpBom.setQuantityOrginal(item.getBomTotal()*materialRate);
         factMpBom.setQuantityPlan(factMpBom.getQuantityOrginal());
         factMpBom.setQuantityIssued(0d);
-        factMpBom.setJobCode(item.getId());
+        factMpBom.setJobCode("");
         factMpBom.setSrcCode("E-BOM");
         factMpBom.setMaterialUnit(item.getBomUnit());
         factMpBomList.add(factMpBom);
