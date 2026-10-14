@@ -58,6 +58,7 @@ rule "proof_material_2_EBOM"
     factBom.setOrderDetailId(factProofCargo.getOrderDetailId());
     factBom.setProofId(proofingId);
     factBom.setProofCargoId(proofCargoId);
+    factBom.setProofDetailId(proofDetailId);
     factBom.setCargoId(factProofDetail.getCargoCargoId());  //此处色纱标识，该值未必会出现在tb_cargo表中，对应字段cargo_cargo_id
     factBom.setCargoWeight(factProofCargo.getCargoWeight());
     factBom.setCargoLiquorRatio(factProofCargo.getCargoLiquorRatio());

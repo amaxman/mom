@@ -26,6 +26,9 @@ import mom.service.factory.lab.FactBomService
 import mom.service.factory.lab.FactBomDetailService
 import mom.service.factory.material.FactDyeAdjuvantService
 import java.util.ArrayList
+import mom.view.factory.manufacture.FactMpBomController
+import mom.entity.factory.manufacture.MpChgMaterial
+import mom.service.factory.manufacture.MpChgMaterialService
 dialect  "java"
 
 global String manuPlanDetailId;
@@ -173,4 +176,11 @@ rule "proof_eBom_2_mBom_mpDetailId"
     if (factMpBomList.isEmpty()) throw new Exception("获取生产M-BOM失败");
 
     factMpBomService.insertBatch(factMpBomList);
+
+    FactMpBomController factMpBomController=SpringUtils.getBean(FactMpBomController.class);
+    List<MpChgMaterial> mpChgMaterialList=factMpBomController.getMaterialChangeByMpBom(factMpBomList);
+    if (mpChgMaterialList!=null && ! mpChgMaterialList.isEmpty()) {
+        MpChgMaterialService mpChgMaterialService=SpringUtils.getBean(MpChgMaterialService.class);
+        mpChgMaterialService.insertBatch(mpChgMaterialList);
+    }
 end
