@@ -29,6 +29,7 @@ import java.util.ArrayList
 import mom.view.factory.manufacture.FactMpBomController
 import mom.entity.factory.manufacture.MpChgMaterial
 import mom.service.factory.manufacture.MpChgMaterialService
+import mom.service.factory.manufacture.MpBomBAL
 dialect  "java"
 
 global String manuPlanDetailId;
@@ -146,6 +147,7 @@ rule "proof_eBom_2_mBom_mpDetailId"
 
         switch (bomObjectCate) {
             case "cargo":
+            case "yarn":
                 Cargo cargoCate=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
                 factMpBom.setMaterialId(bomObjectId);
                 if (cargoCate!=null) {
@@ -177,8 +179,8 @@ rule "proof_eBom_2_mBom_mpDetailId"
 
     factMpBomService.insertBatch(factMpBomList);
 
-    FactMpBomController factMpBomController=SpringUtils.getBean(FactMpBomController.class);
-    List<MpChgMaterial> mpChgMaterialList=factMpBomController.getMaterialChangeByMpBom(factMpBomList);
+    MpBomBAL mpBomBAL=SpringUtils.getBean(MpBomBAL.class);
+    List<MpChgMaterial> mpChgMaterialList=mpBomBAL.getMaterialChangeByMpBom(factMpBomList);
     if (mpChgMaterialList!=null && ! mpChgMaterialList.isEmpty()) {
         MpChgMaterialService mpChgMaterialService=SpringUtils.getBean(MpChgMaterialService.class);
         mpChgMaterialService.insertBatch(mpChgMaterialList);

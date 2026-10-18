@@ -117,6 +117,7 @@ rule "RD_Proof_Cargo_Convert"
     cargo.setLastVatNo("");
     cargo.setLastManuPlanId("");
     cargo.setLastManuPlanDetailId("");
+    cargo.setMaterialCate("cargo"); //此刻物料类别为色纱
     cargoService.save(cargo);
 
     factProofDetail.setCargoCargoId(cargoCargoId);

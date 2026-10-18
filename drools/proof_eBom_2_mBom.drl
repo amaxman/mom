@@ -26,7 +26,8 @@ import mom.service.factory.manufacture.FactoryManuPlanDetailService
 import mom.service.factory.manufacture.FactoryManuPlanService
 import mom.view.factory.manufacture.FactMpBomController
 import mom.entity.factory.manufacture.MpChgMaterial
-import mom.service.factory.manufacture.MpChgMaterialService;
+import mom.service.factory.manufacture.MpChgMaterialService
+import mom.service.factory.manufacture.MpBomBAL;
 
 dialect  "java"
 
@@ -135,14 +136,17 @@ rule "proof_eBom_2_mBom"
         String bomObjectId=item.getBomObjectId(),bomObjectCate=item.getBomCate();
         if (StringUtils.isEmpty(bomObjectId)) return;
         if (StringUtils.isEmpty(bomObjectCate)) bomObjectCate="cargo";
+        factMpBom.setMaterialCate(bomObjectCate);
 
         switch (bomObjectCate) {
             case "cargo":
+            case "yarn":
                 Cargo cargo=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
                 factMpBom.setMaterialId(bomObjectId);
                 if (cargo!=null) {
                     factMpBom.setMaterialCode(cargo.getCargoCode());
                 }
+
                 break;
             default:
                 FactDyeAdjuvant factDyeAdjuvant=factDyeAdjuvantList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
@@ -168,8 +172,8 @@ rule "proof_eBom_2_mBom"
 
     factMpBomService.insertBatch(factMpBomList);
 
-    FactMpBomController factMpBomController=SpringUtils.getBean(FactMpBomController.class);
-    List<MpChgMaterial> mpChgMaterialList=factMpBomController.getMaterialChangeByMpBom(factMpBomList);
+    MpBomBAL mpBomBAL=SpringUtils.getBean(MpBomBAL.class);
+    List<MpChgMaterial> mpChgMaterialList=mpBomBAL.getMaterialChangeByMpBom(factMpBomList);
     if (mpChgMaterialList!=null && ! mpChgMaterialList.isEmpty()) {
         MpChgMaterialService mpChgMaterialService=SpringUtils.getBean(MpChgMaterialService.class);
         mpChgMaterialService.insertBatch(mpChgMaterialList);
