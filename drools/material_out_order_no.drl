@@ -1,0 +1,55 @@
+package mom.service.drl;
+
+import mom.entity.factory.material.StockOut
+import com.jeesite.common.lang.StringUtils
+import mom.service.factory.manufacture.FactoryManuPlanDetailService
+import com.jeesite.common.utils.SpringUtils
+import mom.entity.factory.manufacture.FactoryManuPlanDetail
+import mom.entity.factory.order.FactoryOrder
+import mom.service.factory.order.FactoryOrderService
+import mom.service.factory.order.FactoryOrderDetailService
+import mom.entity.factory.order.FactoryOrderDetail
+import mom.service.factory.client.ClientService
+import mom.entity.factory.client.Client
+import mom.service.basic.config.DataValueService
+import com.jeesite.common.lang.DateUtils
+import java.util.Date;
+
+dialect  "java"
+
+global StockOut stockOut;
+//物料出库单单号
+rule "material_out_order_no"
+    when
+    then
+    if (stockOut==null) throw new Exception("物料出库数据不允许为空");
+
+    String manuPlanDetailId=stockOut.getPlanDetailId();
+    if (StringUtils.isEmpty(manuPlanDetailId)) throw new Exception("出库工单项标识不允许为空");
+
+    FactoryManuPlanDetailService factoryManuPlanDetailService=SpringUtils.getBean(FactoryManuPlanDetailService.class);
+    FactoryManuPlanDetail factoryManuPlanDetail=factoryManuPlanDetailService.get(manuPlanDetailId);
+    if (factoryManuPlanDetail==null) throw new Exception("工单项不存在，可能已经被删除");
+
+    String orderDetailId=factoryManuPlanDetail.getOrderDetailId();
+    if (StringUtils.isEmpty(orderDetailId)) throw new Exception("订单项标识不允许为空");
+    FactoryOrderDetailService factoryOrderDetailService=SpringUtils.getBean(FactoryOrderDetailService.class);
+    FactoryOrderDetail factoryOrderDetail=factoryOrderDetailService.get(orderDetailId);
+    if (factoryOrderDetail==null) throw new Exception("订单项不存在，可能已经被删除");
+
+    String orderId=factoryOrderDetail.getOrderId();
+    if (StringUtils.isEmpty(orderId)) throw new Exception("订单标识不存在");
+    FactoryOrderService factoryOrderService=SpringUtils.getBean(FactoryOrderService.class);
+    FactoryOrder factoryOrder=factoryOrderService.get(orderId);
+    if (factoryOrder==null) throw new Exception("订单不存在，可能已经被删除");
+
+    String clientId=factoryOrder.getClientId();;
+    if (StringUtils.isEmpty(clientId)) throw new Exception("订单客户标识不存在");
+    ClientService clientService=SpringUtils.getBean(ClientService.class);
+    Client client=clientService.get(clientId);
+    if (client==null) throw new Exception("客户不存在，可能已经被删除");
+    String clientCode=client.getClientCode();
+    if (StringUtils.isEmpty(clientCode)) throw new Exception("客户未设定编号");;
+    DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
+    stockOut.setStockOutNo("CK101-"+clientCode+DateUtils.formatDate(new Date(),"yyMMdd")+"-"+String.format("%02d",dataValueService.getNextNum("material_out")));
+end

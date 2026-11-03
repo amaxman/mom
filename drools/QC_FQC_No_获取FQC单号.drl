@@ -78,7 +78,7 @@ rule "QC_FQC_No"
     }
     DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
     String qcNo=String.format(
-                           "SB01-%s%s%02d"
+                           "SB01-%s%s-%02d"
                            ,clientCode
                            ,DateUtils.formatDate(new Date(),"yyMMdd")
                            ,dataValueService.getNextNum("qc_fqc_id")

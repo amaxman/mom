@@ -16,6 +16,9 @@ import mom.entity.factory.lab.FactBomDetail
 import java.util.ArrayList
 import mom.service.factory.lab.FactBomService
 import mom.service.factory.lab.FactBomDetailService
+import java.util.stream.Collectors
+import mom.entity.factory.cargo.Cargo
+import mom.service.factory.cargo.CargoService
 dialect  "java"
 
 global String proofDetailId;
@@ -49,6 +52,15 @@ rule "proof_material_2_EBOM"
     List<FactProofMaterial> factProofMaterialList=factProofMaterialService.getByProofDetailId(proofDetailId);
     if (factProofMaterialList==null || factProofMaterialList.isEmpty()) throw new Exception("打样物料不存在，无法转换为研发BOM");
 
+    //#region 物料
+    List<String> cargoIdList=factProofMaterialList.stream()
+            .filter(p->StringUtils.isNotEmpty(p.getMaterialId()))
+            .map(p->p.getMaterialId())
+            .distinct().collect(Collectors.toList());
+    CargoService cargoService=SpringUtils.getBean(CargoService.class);
+    List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
+    //#endregion
+
     //E-BOM主表
     FactBomService factBomService=SpringUtils.getBean(FactBomService.class);
     FactBom factBom=factBomService.getLastByOrderDetailId(factProofCargo.getOrderDetailId());
@@ -75,10 +87,14 @@ rule "proof_material_2_EBOM"
         factBomDetail.setProcessLibId(item.getProcessLibId());
         factBomDetail.setProcessId(item.getProcessId());
         factBomDetail.setProcedureId(item.getProcedureId());
-
         factBomDetail.setProofMaterialId(factProofCargo.getCargoDefineId());
-        factBomDetail.setBomObjectId(item.getMaterialId());
-        factBomDetail.setBomCate("cargo");
+
+        String materialId=item.getMaterialId();
+        Cargo cargo=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),materialId)).findFirst().orElse(null);
+        if (cargo==null) return;
+        factBomDetail.setBomObjectId(materialId);
+        factBomDetail.setBomCate(cargo.getMaterialCate());
+
         factBomDetail.setBomTotal(item.getMaterialTotal());
         factBomDetail.setBomUnit(item.getMaterialUnit());
         factBomDetail.setValidityDate(new Date());

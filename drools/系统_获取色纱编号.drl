@@ -56,7 +56,7 @@ rule "sys_set_cargo_no"
     cargo.setProofEdition(factProofDetail.getProofingCode());
 
     cargo.setSrcCode(factProofDetail.getId());
-    cargo.setCargoMetering("");
+    cargo.setCargoMetering(cargoDefine.getCargoMeteringUnit());
     cargo.setCargoMeteringUnit(cargoDefine.getCargoMeteringUnit());
     cargo.setCargoMeteringUnitCode("");
 

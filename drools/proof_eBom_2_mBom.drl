@@ -57,19 +57,10 @@ rule "proof_eBom_2_mBom"
 
     //#region 物料
     List<String> cargoIdList=factBomDetailList.stream()
-            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
+            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()))
             .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
     CargoService cargoService=SpringUtils.getBean(CargoService.class);
     List<Cargo> cargoList=cargoService.findListByIdList(cargoIdList);
-    //#endregion
-
-    //#region 燃料与助剂
-    List<String> dyeAdjuvantIdList=factBomDetailList.stream()
-            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && !StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
-            .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
-
-    FactDyeAdjuvantService factDyeAdjuvantService=SpringUtils.getBean(FactDyeAdjuvantService.class);
-    List<FactDyeAdjuvant> factDyeAdjuvantList=factDyeAdjuvantService.findListByIdList(dyeAdjuvantIdList);
     //#endregion
 
     //#region 打样
@@ -133,29 +124,16 @@ rule "proof_eBom_2_mBom"
 
 
         //#region 物料
-        String bomObjectId=item.getBomObjectId(),bomObjectCate=item.getBomCate();
+        String bomObjectId=item.getBomObjectId();
         if (StringUtils.isEmpty(bomObjectId)) return;
-        if (StringUtils.isEmpty(bomObjectCate)) bomObjectCate="cargo";
-        factMpBom.setMaterialCate(bomObjectCate);
 
-        switch (bomObjectCate) {
-            case "cargo":
-            case "yarn":
-                Cargo cargo=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
-                factMpBom.setMaterialId(bomObjectId);
-                if (cargo!=null) {
-                    factMpBom.setMaterialCode(cargo.getCargoCode());
-                }
-
-                break;
-            default:
-                FactDyeAdjuvant factDyeAdjuvant=factDyeAdjuvantList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
-                if (factDyeAdjuvant!=null) {
-                    factMpBom.setMaterialCode(factDyeAdjuvant.getCode());
-                    factMpBom.setMaterialId(factDyeAdjuvant.getMaterialId());
-                }
-                break;
+        Cargo cargo=cargoList.stream().filter(p->StringUtils.equalsIgnoreCase(p.getId(),bomObjectId)).findFirst().orElse(null);
+        if (cargo!=null) {
+            factMpBom.setMaterialId(bomObjectId);
+            factMpBom.setMaterialCode(cargo.getCargoCode());
+            factMpBom.setMaterialCate(cargo.getMaterialCate());
         }
+
         //#endregion
 
         factMpBom.setQuantityOrginal(item.getBomTotal()*materialRate);

@@ -81,7 +81,7 @@ rule "RD_Proof_Cargo_Convert"
     cargo.setProofEdition(factProofDetail.getProofingCode());	//定板号
 
     cargo.setSrcCode("P");
-    cargo.setCargoMetering("");
+    cargo.setCargoMetering(cargoDefine.getCargoMeteringUnit());
     cargo.setCargoMeteringUnit(cargoDefine.getCargoMeteringUnit());
 
     cargo.setFqc(Global.NO);

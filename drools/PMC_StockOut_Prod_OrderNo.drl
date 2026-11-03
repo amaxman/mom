@@ -28,7 +28,7 @@ rule "PMC_StockOut_Prod_OrderNo"
     DataValueService dataValueService=SpringUtils.getBean(DataValueService.class);
     factStockOutProd.setStockOutOrderNo(
             String.format(
-                    "DX50-%s%s%s"
+                    "DX50-%s%s-%s"
                     ,clientCode
                     ,DateUtils.formatDate(new Date(),"yyMMdd")
                     ,String.format("%02d",dataValueService.getNextNum("stockOutProdOrderNo"))

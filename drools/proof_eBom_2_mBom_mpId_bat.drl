@@ -101,18 +101,9 @@ rule "proof_eBom_2_mBom_mpId_bat"
 
     //#region BOM明细中的物料 cargoListBOM
     List<String> cargoIdListBOM=factBomDetailList.stream()
-            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
+            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()))
             .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
     List<Cargo> cargoListBOM=cargoService.findListByIdList(cargoIdListBOM);
-    //#endregion
-
-    //#region 燃料与助剂 factDyeAdjuvantList
-    List<String> dyeAdjuvantIdList=factBomDetailList.stream()
-            .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && !StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
-            .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
-
-    FactDyeAdjuvantService factDyeAdjuvantService=SpringUtils.getBean(FactDyeAdjuvantService.class);
-    List<FactDyeAdjuvant> factDyeAdjuvantList=factDyeAdjuvantService.findListByIdList(dyeAdjuvantIdList);
     //#endregion
 
     //#region 生成M-BOM
@@ -161,17 +152,9 @@ rule "proof_eBom_2_mBom_mpId_bat"
 
         //#region BOM明细中的物料 cargoListBOM
         List<String> _cargoIdListBOM=_factBomDetailList.stream()
-                .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
+                .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()))
                 .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
         List<Cargo> _cargoListBOM=cargoListBOM.stream().filter(p->_cargoIdListBOM.contains(p.getId())).collect(Collectors.toList());
-        //#endregion
-
-        //#region 燃料与助剂 factDyeAdjuvantList
-        List<String> _dyeAdjuvantIdList=_factBomDetailList.stream()
-                .filter(p->StringUtils.isNotEmpty(p.getBomObjectId()) && !StringUtils.equalsIgnoreCase("cargo",p.getBomCate()))
-                .map(p->p.getBomObjectId()).distinct().collect(Collectors.toList());
-
-        List<FactDyeAdjuvant> _factDyeAdjuvantList=factDyeAdjuvantList.stream().filter(p->_dyeAdjuvantIdList.contains(p.getId())).collect(Collectors.toList());;
         //#endregion
 
         double materialWeight=factProofCargo.getCargoWeight();
@@ -180,7 +163,6 @@ rule "proof_eBom_2_mBom_mpId_bat"
         List<FactMpBom> _factMpBomList=mpBomBAL.convertEOM2MBOM(
                 _factBomDetailList
                 ,_cargoListBOM
-                ,_factDyeAdjuvantList
                 ,item.getOrderId()
                 ,item.getOrderDetailId()
                 ,item.getManuPlanId()
